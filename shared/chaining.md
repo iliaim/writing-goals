@@ -51,6 +51,31 @@ Split until every leaf has an `acceptance[]` a fresh agent could confirm from ou
   sub-goal files linked by `depends_on`, **never** a nested array inside one file. One node =
   one file.
 
+### `_objective.md` skeleton
+
+The anti-drift check (§7) traces every sub-goal back to this file, so it must exist before any
+sub-goal runs:
+
+```
+---
+objective: <one sentence — the observable end-state the whole chain delivers>
+acceptance:                       # chain is DONE only when EVERY line verifies fresh-context
+  - "<top-level check + pass signal>"
+  - "<...>"
+stop_rules:                       # global bounds every sub-goal inherits
+  max_iterations: <N>             # hard cap across the whole chain
+  max_cost: <$ / tokens>          # budget kill
+  max_wallclock: <duration>       # time kill
+  on_block: escalate-to-human     # retry → replan → single-owner → human (§8)
+autonomy_policy: shared/autonomy.md   # 5-class model + deny-list the run obeys
+---
+
+# <objective title>
+
+<Why this matters + the hard constraints that must not regress. IMMUTABLE — changing it is a
+Class-3 human checkpoint (§7), never an unattended rewrite to make the plan "fit".>
+```
+
 ### Sub-goal frontmatter schema
 
 | Field | Req? | Meaning |
@@ -95,6 +120,13 @@ loop:
   `.goals/` files** — no in-memory plan to lose. That is what "resumable" means here.
 - Verification is **fresh-context**: the agent that verifies is not the one that made the
   change, and it re-runs the gate rather than trusting a claim.
+- **Where `in_review` / `cancelled` enter:** the maker sets **`in_review`** when it finishes
+  but before the fresh-context verify signs off (the handoff between `execute` and `VERIFY`
+  above — explicit whenever a review checkpoint sits between maker and checker, e.g.
+  human-gated mode); the verifier then moves it to `done` or back to `todo`/`blocked`.
+  **`cancelled`** is a terminal state set during replan (§6–§7) when a sub-goal no longer
+  serves any `_objective.md` acceptance line — the frontier skips it and it never counts as
+  `done`.
 
 ## 6. Between goals — reflect + replan from real state
 

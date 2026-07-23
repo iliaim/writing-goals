@@ -19,6 +19,20 @@ The maker never certifies its own completion; every goal ends at observable evid
 
 `sync.sh` symlinks (single source of truth = this folder), so edits here propagate live. `./sync.sh codex` installs the Codex adapter once it exists.
 
+## Enable the deterministic gate (optional, for unattended runs)
+
+The Stop-hook gate is **not** wired automatically — set it up when you want a code-side checker (the maker ≠ checker separation) for an unattended run:
+
+1. Copy `assets/gate.claude.sh` into your repo's `.claude/hooks/`.
+2. `chmod +x .claude/hooks/gate.claude.sh`.
+3. Add a `Stop` hook pointing at it in `.claude/settings.json` (the `matcher` is ignored for `Stop`):
+
+   ```json
+   { "hooks": { "Stop": [ { "hooks": [ { "type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/gate.claude.sh" } ] } ] } }
+   ```
+
+Wiring details, the out-of-repo iteration counter, and the `PreToolUse` deny-list pairing live in `shared/gates.md`. **Caveat for bypass-mode autonomy:** run the whole agent inside an **OS-level sandbox** — the deny-list + gate are best-effort backstops, not the security boundary.
+
 ## What's inside
 
 | Path | Purpose |
@@ -33,7 +47,7 @@ The maker never certifies its own completion; every goal ends at observable evid
 
 - **Authors one verifiable goal** — investigate the repo (zero-assumption), classify each fact as *must-ask* vs *derive-then-confirm*, then produce a goal = one slice + a pre-written gate + inherited Definition-of-Done + an evidence requirement + three bounds (success / failure / hard cap).
 - **Decomposes a big objective** into atomic `.goals/*.md` files with a dependency DAG, a resumable ledger run-loop, and safe parallelism (disjoint artifacts, single-writer, isolated worktrees).
-- **Runs autonomously and safely** — a 5-class action model, decide-and-log for reversible choices, and a deterministic `PreToolUse` deny-list that holds even in bypass/full-permission mode.
+- **Runs autonomously and safely** — a 5-class action model, decide-and-log for reversible choices, and a `PreToolUse` deny-list as a best-effort backstop against footguns. **The real boundary for unattended / bypass-mode runs is an OS-level sandbox** (container/VM, read-only mounts outside the repo, non-root, egress via an allowlisting proxy); the deny-list + gate are extra layers inside it, not a substitute — string-matching can't contain an adversarial agent. See `shared/autonomy.md`.
 
 ## Status
 

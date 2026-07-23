@@ -47,10 +47,11 @@ Every goal (and chain) carries three stops: **success** (evidence-based end stat
 
 ## Claude specifics
 
+- **Prerequisite (hooks):** the deterministic Stop-hook + `PreToolUse` deny-list require **Claude Code ≥ v2.1.139** and are **unavailable if `disableAllHooks` or `allowManagedHooksOnly` is set**. Without hooks you have Layer-1 only (evidence pasted into the transcript) — no code-side gate.
 - Condition **≤ 4000 chars**; add `or stop after N turns` (soft — the evaluator judges it, it is not a hard kill).
 - Hard stops: `/goal clear`, Ctrl+C, or a Stop-hook that exits clean at the cap.
-- Deterministic gate: `.claude/settings.json` `Stop` hook → `{"decision":"block","reason":…}` keeps looping (reason fed back); clean exit 0 allows stop. Bound with a persisted counter + `stop_hook_active` guard. → `shared/gates.md`
-- Unattended = pair with auto/bypass mode; then tier-3/4 safety must be a deterministic **`PreToolUse` deny-list** (deny wins even in bypass). → `shared/autonomy.md`
+- Deterministic gate: `.claude/settings.json` `Stop` hook → `{"decision":"block","reason":…}` keeps looping (reason fed back); clean exit 0 allows stop. Bound it with a **persisted counter that lives OUTSIDE the repo** — that counter is the real bound. `stop_hook_active` is a runtime loop-guard flag to cross-check (against `stop_reason`), not a documented guarantee. → `shared/gates.md`
+- Unattended = pair with auto/bypass mode. The **`PreToolUse` deny-list is a best-effort backstop against footguns, NOT a boundary** against an adversarial or prompt-injected agent — string-matching over shell can always be defeated. The real boundary is an **OS-level sandbox** (container/VM, read-only mounts outside the repo, non-root, dropped caps, egress only via an allowlisting proxy); the deny-list + gate are extra layers inside it. → `shared/autonomy.md`
 - Invoke this skill as `/writing-goals`.
 
 ## Quick reference
@@ -61,7 +62,7 @@ Every goal (and chain) carries three stops: **success** (evidence-based end stat
 | A number/threshold you don't have | MUST-ASK — stop or propose-and-checkpoint; never invent an absolute |
 | A test command you haven't confirmed | DERIVE-then-CONFIRM — read config / `--collect-only`; if none, stop (vacuous gate) |
 | A big objective | decompose to `.goals/*.md` DAG → ledger run-loop → gated chain |
-| Unattended run | strongest gate + bounds + `PreToolUse` deny-list + assumption ledger |
+| Unattended run | OS-level sandbox (the real boundary) + strongest gate + bounds + `PreToolUse` deny-list backstop + assumption ledger |
 
 ## Red flags — STOP
 

@@ -58,7 +58,9 @@ not for inventing facts.
 
 ## Hard deny-list (Class 4 — evaluated FIRST)
 
-Deny is checked **before** any allowlist and **beats bypass mode**. These are hard blocks,
+Deny is checked **before** any allowlist and **applies even in bypass mode** — as a
+*classification rule the agent obeys*, not a guarantee the string-matching hook can enforce
+against an adversary (see "the sandbox is the boundary" below). These are hard blocks,
 never auto, never confirmable-into-yes by the doer:
 
 - **Spend money** — purchases, paid API calls beyond budget, provisioning billable resources.
@@ -70,24 +72,60 @@ never auto, never confirmable-into-yes by the doer:
 - **Weaken security** — disable auth, loosen permissions, add a backdoor, exfiltrate.
 - **Cross a trust boundary** not already inside scope.
 
-## Bypass-mode reality — enforce deterministically
+## Bypass-mode reality — the sandbox is the boundary, the hooks are a backstop
 
 In `--dangerously-skip-permissions` (Claude) / full-auto (Codex), the platform's approval
-prompts are **OFF**. A model promise ("I won't do X") is not a control. So Class 3/4 must be
-enforced by **deterministic machinery**, not judgment:
+prompts are **OFF**. A model promise ("I won't do X") is not a control — but neither is a
+string-matching hook. Be honest about what each layer actually buys.
 
-- **`PreToolUse` deny-list hook** (see `assets/deny-list.sh`) — blocks Class-4 shell actions;
-  deny-first precedence beats any allowlist and beats bypass mode.
+**The hooks are a best-effort, defense-in-depth backstop against footguns — NOT a security
+boundary.** The `PreToolUse` deny-list and the Stop-hook gate catch a **cooperative** agent's
+naive or accidental mistakes (a stray `rm -rf`, an unthinking force-push). They do **not**
+contain an **adversarial or prompt-injected** agent. Regex-over-shell is structurally
+unsound: interpreters (`python -c`, `node -e`), quoting and `$IFS` tricks, newlines, writes
+under `$HOME`, and exfiltration through an allowlisted host all slip past string-matching. A
+determined agent **will** defeat the deny-list. Treat it as a seatbelt, not a vault.
+
+**The real boundary for unattended / bypass-mode autonomy is an OS-level sandbox** — run the
+whole agent inside one:
+
+- a **container or VM**, disposable, so a breakout damages nothing that matters;
+- **read-only mounts** for everything outside the working repo;
+- a **non-root user** with **dropped capabilities**;
+- **no ambient network egress** — deny by default; allow only through an **allowlisting
+  egress proxy** you control.
+
+The deny-list and gate sit *inside* that sandbox as **extra layers** that cut noise and catch
+honest mistakes — **not instead of it**. If the only thing between an unattended agent and
+your production network is a bash regex, you have no boundary.
+
+**The hardened scripts now fail closed.** `assets/deny-list.sh` **denies on un-parseable or
+uncertain input** instead of waving it through, and the gate's iteration counter lives in a
+file **outside the repo** (so the agent under gate can't rewrite its own budget); if that
+state is missing or unwritable, the gate **stops the loop and escalates to a human** rather
+than continue unbounded. This raises the bar against *accidental* bypass — it does not make
+string-matching sound against an adversary.
+
+**Known escape — even the backstop has a hole.** A documented bug (claude-code #47810) can
+bypass `--dangerously-skip-permissions` + `PreToolUse` hooks **after a background task
+completes**. One more reason the hooks cannot be the boundary.
+
+Inside the sandbox, the deterministic layers still earn their place:
+
+- **`PreToolUse` deny-list hook** (`assets/deny-list.sh`) — fail-closed block of Class-4 shell
+  footguns.
   - **Claude:** intercepts tool calls broadly.
   - **Codex caveat:** `PreToolUse` intercepts **shell only** (not Edit/Write) → **pair it
-    with workspace/dir scoping** so file-level dangers are covered by the boundary.
-- **Workspace / dir scoping** — the run cannot touch anything outside the scoped directory.
+    with workspace/dir scoping** so file-level dangers are covered.
+- **Workspace / dir scoping** — belt-and-braces with the sandbox's read-only mounts.
 - **Session cost budget** + **iteration cap** — hard stops so an unattended loop can't burn
   the night away.
-- **Tamper-proof kill-switch** — a stop the run cannot edit around, **recursive to
-  subagents** (a spawned agent inherits the same bounds and deny-list).
+- **Out-of-repo gate counter + kill-switch** — a stop the agent under gate can't edit around
+  (its state lives outside the writable tree), **recursive to subagents** (a spawned agent
+  inherits the same bounds and deny-list).
 
-**Bottom line:** unattended autonomy is safe only when every Class-3/4 path is blocked by a
-deterministic control, every Class-≤2 judgment call is recorded + reversible + surfaced, and
-the whole run sits inside a cost/iteration/kill bound. Anything less is a silent guess with
+**Bottom line:** unattended autonomy is safe only **inside an OS-level sandbox**. Within it,
+every Class-≤2 judgment call is recorded + reversible + surfaced, the run sits inside a
+cost/iteration/kill bound, and the deny-list + gate add a best-effort footgun-catching layer.
+The hooks are the backstop; the sandbox is the boundary. Anything less is a silent guess with
 the safety off.
