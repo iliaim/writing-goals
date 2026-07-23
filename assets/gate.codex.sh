@@ -97,9 +97,11 @@ stop_hook_active="$(printf '%s' "$INPUT" | jq -r '.stop_hook_active // false')"
 session_id="$(printf '%s' "$INPUT" | jq -r '.session_id // ""')"
 transcript_path="$(printf '%s' "$INPUT" | jq -r '.transcript_path // ""')"
 # Codex sets no CLAUDE_PROJECT_DIR-style env var: the repo root is the stdin
-# `cwd` field (verified 0.144.1). Fall back to the hook's own PWD, then ".".
+# `cwd` field (verified present on 0.144.1). We do NOT silently fall back to the
+# hook's own PWD — a missing/renamed `cwd` (e.g. a future Codex build) with a
+# PWD fallback could run the gate in the wrong directory and ALLOW an unverified
+# stop (fail-open). Instead an unusable repo root fails CLOSED (see below).
 REPO_ROOT="$(printf '%s' "$INPUT" | jq -r '.cwd // ""')"
-[ -z "$REPO_ROOT" ] && REPO_ROOT="${PWD:-.}"
 
 # ---- emit a block decision (JSON via jq) + exit 0 --------------------------
 block() {
@@ -113,6 +115,14 @@ escalate() {
   echo "goal-gate: ESCALATE (human needed) — $reason" >&2
   block "HALT and get a human: $reason"
 }
+
+# ---- FAIL CLOSED on an unusable repo root ----------------------------------
+# Empty (Codex didn't send `cwd`) or not an existing directory -> we cannot
+# trust where the gate command would run. BLOCK + escalate rather than run it in
+# an unknown dir and risk allowing an unverified stop.
+if [ -z "$REPO_ROOT" ] || [ ! -d "$REPO_ROOT" ]; then
+  escalate "no usable repo root from hook stdin (.cwd='$REPO_ROOT'); refusing to run the gate in an unknown directory."
+fi
 
 # ---- derive the out-of-repo state location ---------------------------------
 STATE_ROOT="${XDG_STATE_HOME:-$HOME/.local/state}/writing-goals"
@@ -134,11 +144,13 @@ fi
 # defends against the agent editing the tests to make the gate go green.
 surface_hash() {
   # Expand GATE_SURFACE relative to the repo root; hash sorted per-file digests.
+  # Use the sha() helper (picks shasum OR sha256sum) — NOT a hardcoded shasum,
+  # so pinning still works on a sha256sum-only host.
   ( cd "$REPO_ROOT" 2>/dev/null || exit 1
     # shellcheck disable=SC2086
     for f in $GATE_SURFACE; do
-      [ -f "$f" ] && shasum -a 256 "$f" 2>/dev/null
-    done | sort | shasum -a 256 | awk '{print $1}'
+      [ -f "$f" ] && printf '%s:%s\n' "$f" "$(sha < "$f")"
+    done | sort | sha
   )
 }
 if [ -n "$GATE_SURFACE" ]; then

@@ -117,11 +117,13 @@ fi
 # defends against the agent editing the tests to make the gate go green.
 surface_hash() {
   # Expand GATE_SURFACE relative to the repo root; hash sorted per-file digests.
+  # Use the sha() helper (picks shasum OR sha256sum) — NOT a hardcoded shasum,
+  # so pinning still works on a sha256sum-only host.
   ( cd "$REPO_ROOT" 2>/dev/null || exit 1
     # shellcheck disable=SC2086
     for f in $GATE_SURFACE; do
-      [ -f "$f" ] && shasum -a 256 "$f" 2>/dev/null
-    done | sort | shasum -a 256 | awk '{print $1}'
+      [ -f "$f" ] && printf '%s:%s\n' "$f" "$(sha < "$f")"
+    done | sort | sha
   )
 }
 if [ -n "$GATE_SURFACE" ]; then

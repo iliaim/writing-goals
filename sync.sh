@@ -49,8 +49,10 @@ install_codex() {
   # symlink the whole self-contained codex/ dir — it carries SKILL.md +
   # agents/openai.yaml (real) and shared/ + assets/ (its own ../ symlinks).
   # Install into the canonical Codex USER root ($CODEX_HOME/skills, i.e.
-  # ~/.codex/skills), which Codex discovers from any project cwd. (~/.agents/
-  # skills is only a *repo-scoped* root — <repo>/.agents/skills — not global.)
+  # ~/.codex/skills) — root r0 in Codex's "Skill roots" table, discovered from
+  # any cwd. (Note: ~/.agents/skills is ALSO a global root, r1, in 0.144.1; we
+  # just pick the canonical $CODEX_HOME one. The dir was never the problem — a
+  # symlinked SKILL.md *file* is what silently fails; we symlink the whole dir.)
   local root="${CODEX_HOME:-$HOME/.codex}/skills"
   mkdir -p "$root"
   link "$BD/codex" "$root/writing-goals"   # whole-dir symlink (real SKILL.md inside)
