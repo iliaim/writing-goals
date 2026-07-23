@@ -22,8 +22,9 @@ A well-formed goal =
 
 ```
 Done when:     <outcome> — <gate> passes on <the specific thing>
+Also green:    <repo DoD cmds — lint / typecheck / CI> still pass (inherited Definition-of-Done)
 Scope:         only edit <paths>; do NOT touch <verification surface / other packages / config>
-Verification:  run <exact cmd>; paste the last line (exit code + <pass string / number>)
+Verification:  run <exact cmd>; paste the raw output block + exit code (`echo $?`) — not a cherry-picked last line
 Stop:          success = <gate green, output pasted>
                failure = same check fails N× → stop, report blocked (do NOT edit the test)
                max N iterations, cap <time/cost>
@@ -33,7 +34,7 @@ Stop:          success = <gate green, output pasted>
 **Compressed one-line form** (when the slice is small):
 
 ```
-Done when <cmd> shows <specific result>; only edit <paths>; paste output+exit; stop after N fails or M iters.
+Done when <cmd> shows <specific result>; <repo DoD — lint/typecheck/CI> still green; only edit <paths>; paste raw output block + exit code (`echo $?`); stop after N fails or M iters.
 ```
 
 Both forms must survive the second-agent test below. Claude conditions are **≤ 4000 chars**; add
