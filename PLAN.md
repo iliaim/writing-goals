@@ -31,11 +31,11 @@ Status: **v2 draft** — folds in 3 adversarial challengers + 7 research subagen
 | Goal format | condition; **≤4000 chars**; add "or stop after N turns" | free-text; **≤4000 chars**; recommended 6-part / 3-element (Outcome·Constraints·Verification) |
 | Lifecycle | `/goal`, `/goal` (status), `/goal clear` (aliases stop/off/reset/none/cancel) | `/goal`, `/goal edit`, `/goal pause`, `/goal resume`, `/goal clear` |
 | Invocation of our skill | **`/writing-goals`** | **`$writing-goals`** or `/skills` picker or auto-by-description (**no typed `/name`**) |
-| Skill install dir | `~/.claude/skills/writing-goals/` | `~/.agents/skills/writing-goals/` (canonical; `~/.codex/skills/` legacy-but-read) |
-| SKILL.md frontmatter | `name`, `description`, opt `when_to_use`, opt `disable-model-invocation` | **`name`+`description` ONLY**; metadata + manual-invocation (`allow_implicit_invocation:false`) in **`agents/openai.yaml`** |
-| Stop-hook config | `.claude/settings.json` → `hooks.Stop[]` | `.codex/hooks.json` → `hooks.Stop[]` (PascalCase events; **on by default**; must be **trusted** via `/hooks` or `--dangerously-bypass-hook-trust`) |
-| Stop-hook block contract | `{"decision":"block","reason":…}` / exit 2; clean exit 0 = allow | **`{"continue":false,"stopReason","systemMessage"}` + stdout continuation prompt** — **NOT** `decision:block` |
-| Deterministic block confirmed? | Yes | **UNVERIFIED on 0.144.1 → smoke-test (script ready) before relying; fallback to condition-level if notify-only** |
+| Skill install dir | `~/.claude/skills/writing-goals/` | **`~/.codex/skills/writing-goals/`** = `$CODEX_HOME/skills`, the canonical USER root (discovered from any cwd). ⚠️ CORRECTED: `~/.agents/skills` is only a **repo-scoped** root (`<repo>/.agents/skills`), NOT a global home dir. **Loader does NOT follow a symlinked `SKILL.md` file — only a symlinked skill DIR** → install by symlinking the whole self-contained `codex/` dir. |
+| SKILL.md frontmatter | `name`, `description`, opt `when_to_use`, opt `disable-model-invocation` | **`name`+`description` ONLY**; UI metadata (`interface:` block) + policy (`allow_implicit_invocation`, default true) in **`agents/openai.yaml`** (the `SkillMetadataFile`) |
+| Stop-hook config | `.claude/settings.json` → `hooks.Stop[]` | `.codex/hooks.json` → `hooks.Stop[]` (auto-discovered per layer: project `<repo>/.codex/hooks.json` overrides user `~/.codex/hooks.json`; PascalCase events; **on by default**; `matcher` optional; only `type:"command"` runs; must be **trusted** via `/hooks` or `--dangerously-bypass-hook-trust`) |
+| Stop-hook block contract | `{"decision":"block","reason":…}` / exit 2; clean exit 0 = allow | ✅ VERIFIED 0.144.1 — **SAME as Claude**: `{"decision":"block","reason":…}` on stdout + exit 0 blocks; exit 2 + stderr also blocks; clean exit 0 = allow. (⚠️ CORRECTED: earlier `{"continue":false,…}` claim was WRONG — `continue:false` *halts Codex entirely*, it does not loop.) Hook stdin gives repo root via **`cwd`** (no `CLAUDE_PROJECT_DIR`), plus `session_id`, `transcript_path`, `stop_hook_active`, `last_assistant_message`. |
+| Deterministic block confirmed? | Yes | ✅ **YES — smoke-tested 0.144.1**: Stop hook fires ≥2× and genuinely re-invokes the turn ("Stop Blocked" → agent works → "Stop Completed"). NOT notify-only. `PreToolUse` stdin is Claude-identical (`tool_name:"Bash"`, `tool_input.command`) → shared `deny-list.sh` reused verbatim; caveat: Codex PreToolUse is shell-only. |
 
 ---
 
@@ -166,10 +166,10 @@ Tested via fresh subagents on **≥4 repos** (Node w/ tests · Python lib · **n
 
 ---
 
-## 10. Build-time verifications (must run, don't assume)
-1. **Codex Stop-hook blocking on 0.144.1** — run the ready smoke-test; if notify-only, Codex mode-2/3 gates at condition-level + fresh-context verifier instead of hook-block.
-2. **Codex skills dir precedence** — probe `~/.agents/skills` vs `~/.codex/skills` (drop marker skills, check `/skills`).
-3. **Symlink-follow at load** — confirm both loaders resolve symlinked skill dirs.
+## 10. Build-time verifications — RESULTS (dogfooded 2026-07-23, codex-cli 0.144.1)
+1. **Codex Stop-hook blocking on 0.144.1** — ✅ **VERIFIED BLOCKS.** Live smoke-test: a `.codex/hooks.json` Stop hook emitting `{"decision":"block","reason":…}`+exit0 fired twice (fire-count probe) and Codex logged "Stop Blocked" → agent did one step → "Stop Completed". NOT notify-only. Contract = Claude's `decision:block` (the prior `continue:false` claim was wrong; `continue:false` halts entirely). `gate.codex.sh` uses this + reads repo root from stdin `cwd`; fixture-tested pass→allow / fail→block / cap→allow with the counter out-of-repo.
+2. **Codex skills dir precedence** — ✅ **RESOLVED via `codex debug prompt-input`** (deterministic model-visible context). User-global root = **`~/.codex/skills`** (discovered from any project cwd). `~/.agents/skills` is only read as a **repo-scoped** root when it sits at the cwd/repo root (my earlier "both work" reading was an artifact of running the probe from `$HOME`). sync.sh now installs to `~/.codex/skills`.
+3. **Symlink-follow at load** — ✅ **VERIFIED + IMPORTANT GOTCHA.** Codex's loader does **NOT** follow a symlinked `SKILL.md` *file* (skill silently fails to load) but **DOES** follow a symlinked skill *directory* with a real SKILL.md inside. Fix: `codex/` is a self-contained dir (SKILL.md + agents/openai.yaml real; `shared`→`../shared`, `assets`→`../assets`) and sync.sh symlinks the whole dir. GREEN-checked: a fresh Codex agent loaded the skill and authored a second-agent-test-passing goal (exact cmd `npm test`/`npm run lint` + exit-0 criterion + 2-fail/5-iter bound + anti-gaming + scope).
 
 ---
 
