@@ -1,0 +1,17 @@
+# Codex UI metadata + invocation policy for the writing-goals skill.
+#
+# The frontmatter in ../SKILL.md is `name` + `description` ONLY; all UI metadata
+# and any invocation policy live here (verified: Codex reads agents/openai.yaml
+# alongside SKILL.md — real examples: impeccable, security-best-practices, aivv).
+#
+# This mirrors the Claude adapter's behavior: the skill stays model-invocable by
+# its description (implicit invocation left at the default = allowed), and is also
+# reachable as `$writing-goals` or via the /skills picker.
+#
+# To make it MANUAL-only (no auto-trigger by description), add either of:
+#     invocation_policy: explicit
+#     allow_implicit_invocation: false
+interface:
+  display_name: "Writing Goals"
+  short_description: "Author verifiable /goal conditions + gated, bounded autonomous goal-chains."
+  default_prompt: "Use writing-goals to author a verifiable, bounded /goal (with a machine-checkable gate) for this task."

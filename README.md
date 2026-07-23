@@ -15,9 +15,12 @@ The maker never certifies its own completion; every goal ends at observable evid
 ```bash
 ./sync.sh claude    # symlinks the skill into ~/.claude/skills/writing-goals
 # then, in a fresh Claude Code session:  /writing-goals
+
+./sync.sh codex     # symlinks the skill into ~/.codex/skills/writing-goals
+# then, in Codex:  $writing-goals  (or the /skills picker, or auto-by-description)
 ```
 
-`sync.sh` symlinks (single source of truth = this folder), so edits here propagate live. `./sync.sh codex` installs the Codex adapter once it exists.
+`sync.sh` symlinks (single source of truth = this folder), so edits here propagate live. Note: Codex's loader does **not** follow a symlinked `SKILL.md` *file*, only a symlinked skill *directory* — so the Codex adapter is installed by symlinking the whole self-contained `codex/` dir into `~/.codex/skills/` (the canonical `$CODEX_HOME/skills` user root, discovered from any project).
 
 ## Enable the deterministic gate (optional, for unattended runs)
 
@@ -31,6 +34,14 @@ The Stop-hook gate is **not** wired automatically — set it up when you want a 
    { "hooks": { "Stop": [ { "hooks": [ { "type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/gate.claude.sh" } ] } ] } }
    ```
 
+For **Codex**, use `assets/gate.codex.sh` instead and wire it in `.codex/hooks.json` (PascalCase events, on by default, must be trusted via `/hooks` or `--dangerously-bypass-hook-trust`):
+
+```json
+{ "hooks": { "Stop": [ { "hooks": [ { "type": "command", "command": "/abs/path/to/gate.codex.sh" } ] } ] } }
+```
+
+Verified on codex-cli 0.144.1: the `Stop` hook genuinely blocks (re-invokes the turn) via `{"decision":"block","reason":"…"}` on stdout — the same contract as Claude; the gate reads the repo root from the hook's stdin `cwd` field.
+
 Wiring details, the out-of-repo iteration counter, and the `PreToolUse` deny-list pairing live in `shared/gates.md`. **Caveat for bypass-mode autonomy:** run the whole agent inside an **OS-level sandbox** — the deny-list + gate are best-effort backstops, not the security boundary.
 
 ## What's inside
@@ -38,8 +49,9 @@ Wiring details, the out-of-repo iteration counter, and the `PreToolUse` deny-lis
 | Path | Purpose |
 |---|---|
 | `claude/SKILL.md` | Claude adapter — navigator + discipline core |
+| `codex/SKILL.md` | Codex adapter (`name`+`description` frontmatter only) + `agents/openai.yaml` (UI metadata) + `shared`/`assets` symlinks (self-contained skill dir) |
 | `shared/` | platform-neutral references: `investigate`, `author-goal`, `gates`, `chaining`, `autonomy`, `modes` |
-| `assets/` | `gate.claude.sh` (Stop-hook + iteration counter), `deny-list.sh` (PreToolUse tier-4 safety), `goal.md.tmpl` |
+| `assets/` | `gate.claude.sh` / `gate.codex.sh` (Stop-hook + iteration counter), `deny-list.sh` (PreToolUse tier-4 safety, shared by both), `goal.md.tmpl` |
 | `sync.sh` | symlink installer (Claude / Codex) |
 | `PLAN.md` | full design + research provenance |
 
@@ -52,7 +64,7 @@ Wiring details, the out-of-repo iteration counter, and the `PreToolUse` deny-lis
 ## Status
 
 - **Claude adapter:** complete, validated (RED → GREEN → REFACTOR).
-- **Codex adapter:** planned (`~/.agents/skills/`; `name`+`description` frontmatter only + `agents/openai.yaml`).
+- **Codex adapter:** complete, dogfooded on codex-cli 0.144.1 (`~/.codex/skills/`; `name`+`description` frontmatter only + `agents/openai.yaml`). Stop-hook blocking, the `decision:block` contract, `PreToolUse` shape, and skills-dir discovery were all verified by live smoke-test — not assumed.
 - **Distribution (plugin / CLI / MCP), Hermes + other adapters:** later, additive.
 
 ## How it was built

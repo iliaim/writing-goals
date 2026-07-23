@@ -43,15 +43,18 @@ install_claude() {
 install_codex() {
   # Codex adapter is a later phase; only install if it exists.
   [ -f "$BD/codex/SKILL.md" ] || { echo "Codex   -> adapter not built yet, skipping"; return 0; }
-  local dest="$HOME/.agents/skills/writing-goals"   # canonical Codex/agent-skills location
-  mkdir -p "$dest"
-  link "$BD/codex/SKILL.md" "$dest/SKILL.md"
-  if [ -f "$BD/codex/agents/openai.yaml" ]; then
-    mkdir -p "$dest/agents"; link "$BD/codex/agents/openai.yaml" "$dest/agents/openai.yaml"
-  fi
-  link "$BD/shared"  "$dest/shared"
-  link "$BD/assets"  "$dest/assets"
-  echo "Codex   -> $dest  (invoke as \$writing-goals / /skills picker)"
+  # VERIFIED on codex-cli 0.144.1: Codex's skill loader does NOT follow a
+  # symlinked SKILL.md *file* (the skill silently fails to load), but it DOES
+  # follow a symlinked skill *directory* with a real SKILL.md inside. So we
+  # symlink the whole self-contained codex/ dir — it carries SKILL.md +
+  # agents/openai.yaml (real) and shared/ + assets/ (its own ../ symlinks).
+  # Install into the canonical Codex USER root ($CODEX_HOME/skills, i.e.
+  # ~/.codex/skills), which Codex discovers from any project cwd. (~/.agents/
+  # skills is only a *repo-scoped* root — <repo>/.agents/skills — not global.)
+  local root="${CODEX_HOME:-$HOME/.codex}/skills"
+  mkdir -p "$root"
+  link "$BD/codex" "$root/writing-goals"   # whole-dir symlink (real SKILL.md inside)
+  echo "Codex   -> $root/writing-goals  (invoke as \$writing-goals / /skills picker)"
 }
 
 case "${1:-all}" in
