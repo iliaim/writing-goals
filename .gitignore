@@ -1,0 +1,8 @@
+# OS / editor cruft
+.DS_Store
+*.swp
+*~
+
+# Skill runtime artifacts (created in target repos, not part of this skill)
+.goal-gate-count
+*.log
