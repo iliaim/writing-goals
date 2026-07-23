@@ -31,7 +31,7 @@ Status: **v2 draft** — folds in 3 adversarial challengers + 7 research subagen
 | Goal format | condition; **≤4000 chars**; add "or stop after N turns" | free-text; **≤4000 chars**; recommended 6-part / 3-element (Outcome·Constraints·Verification) |
 | Lifecycle | `/goal`, `/goal` (status), `/goal clear` (aliases stop/off/reset/none/cancel) | `/goal`, `/goal edit`, `/goal pause`, `/goal resume`, `/goal clear` |
 | Invocation of our skill | **`/writing-goals`** | **`$writing-goals`** or `/skills` picker or auto-by-description (**no typed `/name`**) |
-| Skill install dir | `~/.claude/skills/writing-goals/` | **`~/.codex/skills/writing-goals/`** = `$CODEX_HOME/skills`, the canonical USER root (discovered from any cwd). ⚠️ CORRECTED: `~/.agents/skills` is only a **repo-scoped** root (`<repo>/.agents/skills`), NOT a global home dir. **Loader does NOT follow a symlinked `SKILL.md` file — only a symlinked skill DIR** → install by symlinking the whole self-contained `codex/` dir. |
+| Skill install dir | `~/.claude/skills/writing-goals/` | **`~/.codex/skills/writing-goals/`** = `$CODEX_HOME/skills` = root `r0`, the canonical USER root. Codex 0.144.1's `debug prompt-input` "Skill roots" table shows BOTH `r0 = ~/.codex/skills` AND `r1 = ~/.agents/skills` are **global** roots (loaded from any cwd — verified from a fresh `$TMPDIR`); we install to `r0` as canonical. ⚠️ The real reason the first per-file install failed was NOT the directory — it was that the **loader does NOT follow a symlinked `SKILL.md` file, only a symlinked skill DIR** → install by symlinking the whole self-contained `codex/` dir. |
 | SKILL.md frontmatter | `name`, `description`, opt `when_to_use`, opt `disable-model-invocation` | **`name`+`description` ONLY**; UI metadata (`interface:` block) + policy (`allow_implicit_invocation`, default true) in **`agents/openai.yaml`** (the `SkillMetadataFile`) |
 | Stop-hook config | `.claude/settings.json` → `hooks.Stop[]` | `.codex/hooks.json` → `hooks.Stop[]` (auto-discovered per layer: project `<repo>/.codex/hooks.json` overrides user `~/.codex/hooks.json`; PascalCase events; **on by default**; `matcher` optional; only `type:"command"` runs; must be **trusted** via `/hooks` or `--dangerously-bypass-hook-trust`) |
 | Stop-hook block contract | `{"decision":"block","reason":…}` / exit 2; clean exit 0 = allow | ✅ VERIFIED 0.144.1 — **SAME as Claude**: `{"decision":"block","reason":…}` on stdout + exit 0 blocks; exit 2 + stderr also blocks; clean exit 0 = allow. (⚠️ CORRECTED: earlier `{"continue":false,…}` claim was WRONG — `continue:false` *halts Codex entirely*, it does not loop.) Hook stdin gives repo root via **`cwd`** (no `CLAUDE_PROJECT_DIR`), plus `session_id`, `transcript_path`, `stop_hook_active`, `last_assistant_message`. |
@@ -55,14 +55,16 @@ writing-goals/
     modes.md                   # the 3 execution modes + when to use each
   claude/SKILL.md              # Claude frontmatter + Claude specifics (transcript evaluator, settings.json Stop hook, /writing-goals)
   codex/
-    SKILL.md                   # name+description only; Codex specifics (continue:false hook, $-invocation)
+    SKILL.md                   # name+description only; Codex specifics (decision:block hook, $-invocation)
     agents/openai.yaml         # Codex metadata + invocation policy
+    shared -> ../shared        # self-contained skill dir (so the whole dir can be symlinked)
+    assets -> ../assets
   assets/
     gate.claude.sh             # one concrete runnable gate (decision:block + persisted counter + stop_hook_active guard)
-    gate.codex.sh              # concrete Codex gate (continue:false + counter)
+    gate.codex.sh              # concrete Codex gate (decision:block via stdin cwd + counter)
     deny-list.sh               # PreToolUse safety hook (both) — tier-4 hard blocks
     goal.md.tmpl               # atomic .goals/ file template
-  sync.sh                      # installs (symlinks) claude/→~/.claude, codex/→~/.agents, shared into both
+  sync.sh                      # installs (symlinks) claude/SKILL.md+shared+assets→~/.claude; whole codex/ dir→~/.codex/skills
   PLAN.md
 ```
 
@@ -158,7 +160,7 @@ Runs happen in **bypass/full-permission mode** (Claude `--dangerously-skip-permi
 Tested via fresh subagents on **≥4 repos** (Node w/ tests · Python lib · **no-test** repo · **non-code** docs/research goal):
 - [ ] Correct platform-native goal for each; **no-test & ambiguous-threshold repos STOP and ask** (never invent).
 - [ ] Every goal has success + failure + iteration/cost cap; passes the **fresh-context second-agent test**.
-- [ ] Gate scripts **actually gate** on a fixture (pass→allow, fail→block, malformed→caught) — Claude `decision:block` **and** Codex `continue:false`.
+- [ ] Gate scripts **actually gate** on a fixture (pass→allow, fail→block, malformed→caught) — Claude **and** Codex both via `decision:block` (verified: Codex uses the SAME contract, not `continue:false`).
 - [ ] The **PreToolUse deny-list** blocks a tier-4 action even in bypass mode.
 - [ ] Skill **triggers** on goal-writing intent and **does not misfire** on adjacent tasks.
 - [ ] Chaining: an objective → valid DAG of `.goals/*.md`, ledger-driven run-loop is **resumable**, parallel goals proven non-colliding via `artifacts`, every sub-goal traces to `_objective.md`.
@@ -168,7 +170,7 @@ Tested via fresh subagents on **≥4 repos** (Node w/ tests · Python lib · **n
 
 ## 10. Build-time verifications — RESULTS (dogfooded 2026-07-23, codex-cli 0.144.1)
 1. **Codex Stop-hook blocking on 0.144.1** — ✅ **VERIFIED BLOCKS.** Live smoke-test: a `.codex/hooks.json` Stop hook emitting `{"decision":"block","reason":…}`+exit0 fired twice (fire-count probe) and Codex logged "Stop Blocked" → agent did one step → "Stop Completed". NOT notify-only. Contract = Claude's `decision:block` (the prior `continue:false` claim was wrong; `continue:false` halts entirely). `gate.codex.sh` uses this + reads repo root from stdin `cwd`; fixture-tested pass→allow / fail→block / cap→allow with the counter out-of-repo.
-2. **Codex skills dir precedence** — ✅ **RESOLVED via `codex debug prompt-input`** (deterministic model-visible context). User-global root = **`~/.codex/skills`** (discovered from any project cwd). `~/.agents/skills` is only read as a **repo-scoped** root when it sits at the cwd/repo root (my earlier "both work" reading was an artifact of running the probe from `$HOME`). sync.sh now installs to `~/.codex/skills`.
+2. **Codex skills roots** — ✅ **RESOLVED via `codex debug prompt-input`** (its "Skill roots" table is authoritative). ⚠️ CORRECTED after independent re-verification: **both `r0 = ~/.codex/skills` AND `r1 = ~/.agents/skills` are GLOBAL roots** in 0.144.1 — loaded from any cwd (verified from a fresh `$TMPDIR` with no `.agents` ancestor and no config override). The earlier "`~/.agents/skills` is only repo-scoped" claim was WRONG (my own green-fixture data already showed a real file in `~/.agents/skills` loading from a project dir — I mis-attributed it). We install to `r0` (`~/.codex/skills`) as the canonical `$CODEX_HOME/skills` root; installing to `r1` would also have been discovered. The dir choice was never the bug — the symlinked-SKILL.md-file was (see #3).
 3. **Symlink-follow at load** — ✅ **VERIFIED + IMPORTANT GOTCHA.** Codex's loader does **NOT** follow a symlinked `SKILL.md` *file* (skill silently fails to load) but **DOES** follow a symlinked skill *directory* with a real SKILL.md inside. Fix: `codex/` is a self-contained dir (SKILL.md + agents/openai.yaml real; `shared`→`../shared`, `assets`→`../assets`) and sync.sh symlinks the whole dir. GREEN-checked: a fresh Codex agent loaded the skill and authored a second-agent-test-passing goal (exact cmd `npm test`/`npm run lint` + exit-0 criterion + 2-fail/5-iter bound + anti-gaming + scope).
 
 ---
