@@ -21,6 +21,32 @@ assert_nonzero 'all refuses a later real Codex collision'
 assert_path_absent "$home/.claude/skills/writing-goals" 'all collision leaves no partial Claude install'
 assert_file_contains "$home/.codex/skills/writing-goals/KEEP" '^codex sentinel$' 'all collision preserves Codex sentinel'
 
+# A blocked later ancestor must be detected before the first adapter mutates.
+home="$TEST_TMP/all-ancestor-atomic"
+mkdir -p "$home/.codex"
+printf 'not a directory\n' > "$home/.codex/skills"
+run_command env HOME="$home" CODEX_HOME="$home/.codex" bash "$sync" all
+assert_nonzero 'all refuses a non-directory later Codex ancestor'
+assert_path_absent "$home/.claude/skills/writing-goals" 'all ancestor collision leaves no partial Claude install'
+assert_file_contains "$home/.codex/skills" '^not a directory$' 'all ancestor collision preserves Codex ancestor sentinel'
+
+# Existing ancestors may be symlinks when they resolve to directories (as /var
+# does on macOS), but broken symlink ancestors must still fail preflight.
+real_home="$TEST_TMP/symlink-ancestor-real"
+home="$TEST_TMP/symlink-ancestor-home"
+mkdir -p "$real_home"
+ln -s "$real_home" "$home"
+run_command env HOME="$home" CODEX_HOME="$home/.codex" bash "$sync" claude
+assert_success 'Claude install accepts a symlink ancestor that resolves to a directory'
+assert_link_target "$home/.claude/skills/writing-goals/SKILL.md" "$REPO_DIR/claude/SKILL.md" 'install through a directory symlink uses the canonical source target'
+
+home="$TEST_TMP/broken-symlink-ancestor"
+mkdir -p "$home/.claude"
+ln -s "$home/missing-skills" "$home/.claude/skills"
+run_command env HOME="$home" CODEX_HOME="$home/.codex" bash "$sync" claude
+assert_nonzero 'Claude install refuses a broken symlink ancestor'
+assert_path_absent "$home/missing-skills" 'broken symlink ancestor refusal makes no destination'
+
 # Installer-created links are safe to replace repeatedly without --force.
 home="$TEST_TMP/idempotent"
 run_command env HOME="$home" CODEX_HOME="$home/.codex" bash "$sync" claude
@@ -52,11 +78,13 @@ assert_link_target "$home/.codex/skills/writing-goals" "$REPO_DIR/codex" 'all in
 home="$TEST_TMP/force-scope"
 mkdir -p "$home/.claude/skills/writing-goals" "$home/.codex/skills/writing-goals"
 printf 'replace only me\n' > "$home/.claude/skills/writing-goals/SKILL.md"
+printf 'replace me too\n' > "$home/.claude/skills/writing-goals/EXTRA"
 printf 'leave me alone\n' > "$home/.codex/skills/writing-goals/KEEP"
 run_command env HOME="$home" CODEX_HOME="$home/.codex" bash "$sync" --force claude
 assert_success '--force claude replaces the requested Claude target'
 assert_symlink "$home/.claude/skills/writing-goals/SKILL.md" '--force claude creates a linked Claude skill'
 assert_link_target "$home/.claude/skills/writing-goals/SKILL.md" "$REPO_DIR/claude/SKILL.md" '--force claude uses canonical Claude SKILL target'
+assert_path_absent "$home/.claude/skills/writing-goals/EXTRA" '--force claude replaces the exact Claude target'
 assert_file_contains "$home/.codex/skills/writing-goals/KEEP" '^leave me alone$' '--force claude does not replace Codex target'
 
 finish_tests
