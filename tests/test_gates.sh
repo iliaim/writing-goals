@@ -79,9 +79,12 @@ for platform in claude codex; do
   if [ -n "$count_file" ]; then pass "$platform creates a session-keyed counter"; else fail "$platform creates a session-keyed counter"; fi
   if [ -n "$count_file" ]; then
     printf 'corrupt' > "$count_file"
-    gate_once "$platform" "$input" "$corrupt_state" 'printf SHOULD-NOT-RUN >&2; false' 8 'surface.txt' "$root"
+    corrupt_marker="$TEST_TMP/$platform-corrupt-command-ran"
+    corrupt_command="printf ran > '$corrupt_marker'; false"
+    gate_once "$platform" "$input" "$corrupt_state" "$corrupt_command" 8 'surface.txt' "$root"
     assert_success "$platform corrupt counter returns a hook-valid status"
     assert_terminal_json "$RUN_OUT" "$platform corrupt counter fails closed before gate execution"
+    assert_path_absent "$corrupt_marker" "$platform corrupt counter never executes GATE_CMD"
   fi
 done
 

@@ -73,6 +73,17 @@ assert_symlink() {
   if [ -L "$path" ]; then pass "$label"; else fail "$label (expected symlink at $path)"; fi
 }
 
+assert_link_target() {
+  local path="$1" expected="$2" label="$3" actual
+  TEST_COUNT=$((TEST_COUNT + 1))
+  actual="$(readlink "$path" 2>/dev/null)"
+  if [ "$actual" = "$expected" ]; then
+    pass "$label"
+  else
+    fail "$label (expected '$expected', got '${actual:-not a symlink}')"
+  fi
+}
+
 run_command() {
   local id
   id=$((TEST_COUNT + TEST_FAILURES + 1))
