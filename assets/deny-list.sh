@@ -83,10 +83,11 @@ if ! printf '%s' "$INPUT" | jq -e . >/dev/null 2>&1; then
 fi
 TOOL="$(printf '%s' "$INPUT" | jq -r '.tool_name // ""')"
 CMD_RAW="$(printf '%s' "$INPUT" | jq -r '.tool_input.command // ""')"
+PAYLOAD_CWD="$(printf '%s' "$INPUT" | jq -r '.cwd // ""')"
 
-# Only shell tools are in scope. Anything else -> allow (exit 0, no output).
+# Only shell tools and Codex apply_patch are in scope. Anything else -> allow.
 case "$TOOL" in
-  Bash|bash|shell|Shell) : ;;
+  Bash|bash|shell|Shell|apply_patch) : ;;
   *) exit 0 ;;
 esac
 
@@ -130,8 +131,18 @@ dev_write_ok() {
 }
 
 # ---- path helpers (used by the write/delete target check) ------------------
-REPO_ROOT="${CLAUDE_PROJECT_DIR:-$PWD}"
-REPO_PHYS="$(cd -P "$REPO_ROOT" 2>/dev/null && pwd -P)" || REPO_PHYS="$REPO_ROOT"
+REPO_ROOT=""
+for root_candidate in "$PAYLOAD_CWD" "${CLAUDE_PROJECT_DIR:-}" "${PWD:-}"; do
+  if [ -n "$root_candidate" ] && [ -d "$root_candidate" ]; then
+    REPO_ROOT="$root_candidate"
+    break
+  fi
+done
+if [ -n "$REPO_ROOT" ]; then
+  REPO_PHYS="$(cd -P "$REPO_ROOT" 2>/dev/null && pwd -P)" || REPO_PHYS=""
+else
+  REPO_PHYS=""
+fi
 
 # lexically collapse '.' and '..' in an absolute path (no filesystem access)
 collapse() {
@@ -177,6 +188,9 @@ is_inside() {
 # Resolve one candidate write/delete target and DENY if it escapes the repo.
 check_target() {
   local t="$1"
+  if [ -z "$REPO_PHYS" ]; then
+    deny "no valid repository root is available; cannot prove the mutation stays in-repo — failing closed."
+  fi
   # strip one layer of surrounding quotes
   case "$t" in
     \"*\") t="${t#\"}"; t="${t%\"}" ;;
@@ -216,6 +230,93 @@ check_target() {
   fi
 }
 
+# Codex supplies the complete apply_patch program in tool_input.command. Treat
+# its framing and operation headers as a small language rather than guessing
+# from paths that happen to occur in the payload.
+if [ "$TOOL" = "apply_patch" ]; then
+  [ -n "$REPO_PHYS" ] || deny "no valid repository root is available; cannot validate apply_patch targets."
+
+  patch_line_no=0
+  patch_operations=0
+  patch_ended=0
+  patch_current_operation=""
+  while IFS= read -r patch_line || [ -n "$patch_line" ]; do
+    patch_line_no=$((patch_line_no + 1))
+
+    if [ "$patch_line_no" -eq 1 ]; then
+      [ "$patch_line" = "*** Begin Patch" ] || deny "apply_patch payload is missing the exact Begin Patch boundary."
+      continue
+    fi
+    [ "$patch_ended" -eq 0 ] || deny "apply_patch payload contains content after End Patch."
+
+    case "$patch_line" in
+      '*** End Patch')
+        patch_ended=1
+        patch_current_operation=""
+        ;;
+      '*** Add File: '*)
+        patch_target="${patch_line#*** Add File: }"
+        [ -n "$patch_target" ] || deny "apply_patch Add File operation has no target."
+        check_target "$patch_target"
+        patch_operations=$((patch_operations + 1))
+        patch_current_operation="Add"
+        ;;
+      '*** Update File: '*)
+        patch_target="${patch_line#*** Update File: }"
+        [ -n "$patch_target" ] || deny "apply_patch Update File operation has no target."
+        check_target "$patch_target"
+        patch_operations=$((patch_operations + 1))
+        patch_current_operation="Update"
+        ;;
+      '*** Delete File: '*)
+        patch_target="${patch_line#*** Delete File: }"
+        [ -n "$patch_target" ] || deny "apply_patch Delete File operation has no target."
+        check_target "$patch_target"
+        patch_operations=$((patch_operations + 1))
+        patch_current_operation="Delete"
+        ;;
+      '*** Move to: '*)
+        patch_target="${patch_line#*** Move to: }"
+        [ "$patch_current_operation" = "Update" ] || deny "apply_patch Move to must belong to an Update File operation."
+        [ -n "$patch_target" ] || deny "apply_patch Move to operation has no destination."
+        check_target "$patch_target"
+        ;;
+      '--- '*|'+++ '*)
+        deny "legacy diff headers are not a supported apply_patch operation."
+        ;;
+      '*** Begin Patch'|'*** Add File:'|'*** Update File:'|'*** Delete File:'|'*** Move to:')
+        deny "apply_patch contains a malformed boundary or operation header."
+        ;;
+      '*** Add '*|'*** Update '*|'*** Delete '*|'*** Move '*|'*** Begin '*|'*** End '*)
+        deny "apply_patch contains a malformed boundary or operation header."
+        ;;
+      '*** '*' File: '*)
+        deny "apply_patch contains an unrecognized operation header."
+        ;;
+      *)
+        # Hunk content is intentionally opaque. In particular, a legitimate
+        # content line may itself begin with "*** ".
+        ;;
+    esac
+  done <<< "$CMD_RAW"
+
+  [ "$patch_ended" -eq 1 ] || deny "apply_patch payload is missing the exact End Patch boundary."
+  [ "$patch_operations" -gt 0 ] || deny "apply_patch payload contains no recognized file operation."
+  exit 0
+fi
+
+# A supported mutation needs a trustworthy root even if its particular parser
+# below would otherwise find no path argument.
+if [ -z "$REPO_PHYS" ] && {
+  has '(^|[[:space:];|&(/])(touch|mkdir|rm|rmdir|unlink|shred|cp|mv|tee|truncate|ln)([[:space:]]|$)' ||
+  has '(^|[[:space:];|&(/])sed[[:space:]]+-[^[:space:]]*i[^[:space:]]*([[:space:]]|$)' ||
+  has '(^|[[:space:]])(>|>>)([[:space:]]|$)' ||
+  has '(^|[[:space:]])of=' ||
+  { has '(^|[[:space:];|&(/])find([[:space:]]|$)' && has '(^|[[:space:]])(-delete|-exec|-execdir)([[:space:]]|$)'; }
+}; then
+  deny "no valid repository root is available; cannot prove the mutation stays in-repo — failing closed."
+fi
+
 # ===========================================================================
 # DENY CHECKS — deny-first order. The FIRST match wins.
 # ===========================================================================
@@ -251,6 +352,10 @@ done
 NET_SENDERS='(curl|wget|nc|ncat|netcat|scp|sftp|rsync|ssh|telnet|ftp|tftp|mail|mailx|sendmail)'
 if has "(^|[[:space:];|&(/])${NET_SENDERS}([[:space:]]|\$)"; then
   deny "outbound network sender detected. Even a POST to an allowlisted host can exfiltrate; egress control belongs at the sandbox/proxy layer, so senders are denied here by default."
+fi
+
+if has '(^|[[:space:];|&(/])(gh|glab)([[:space:]]|$)'; then
+  deny "external repository mutator (gh/glab) is denied in unattended runs."
 fi
 
 # ---- 4) package installs (default-deny package managers as a class) --------
@@ -324,7 +429,7 @@ is_sep() { case "$1" in ';'|'|'|'&'|'('|')') return 0 ;; *) return 1 ;; esac; }
 is_destructive() {
   # match on the basename so an absolute path (/bin/rm) is caught too
   case "${1##*/}" in
-    rm|rmdir|unlink|shred|cp|mv|tee|truncate|ln) return 0 ;;
+    rm|rmdir|unlink|shred|cp|mv|tee|truncate|ln|touch|mkdir) return 0 ;;
     *) return 1 ;;
   esac
 }
@@ -357,6 +462,26 @@ while [ "$i" -lt "$NTOK" ]; do
   fi
   i=$((i+1))
 done
+
+# In-place sed mutates each file operand. We deliberately check every
+# non-option token after sed: treating the edit program as a repo-relative
+# candidate is harmless, while overlooking a file operand is not.
+if has '(^|[[:space:];|&(/])sed[[:space:]]+-[^[:space:]]*i[^[:space:]]*([[:space:]]|$)'; then
+  seen_sed=0
+  i=0
+  while [ "$i" -lt "$NTOK" ]; do
+    tok="${TOKENS[$i]}"
+    if [ "$seen_sed" -eq 1 ]; then
+      is_sep "$tok" && break
+      case "$tok" in
+        -*) : ;;
+        *) check_target "$tok" ;;
+      esac
+    fi
+    [ "${tok##*/}" = "sed" ] && seen_sed=1
+    i=$((i+1))
+  done
+fi
 
 # find ... -delete  /  find ... -exec <destructive> : check the search roots
 if has '(^|[[:space:];|&(/])find([[:space:]]|$)' && \
