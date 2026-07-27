@@ -2,6 +2,21 @@
 set -u
 . "$(dirname "$0")/testlib.sh"
 
+# jq's `//` operator treats boolean false like a missing value, so the generic
+# helper cannot inspect the required JSON boolean. Keep this focused override
+# strict about both the type and the needs-human reason.
+assert_terminal_json() {
+  local file="$1" label="$2" is_false reason
+  TEST_COUNT=$((TEST_COUNT + 1))
+  is_false="$(jq -r '(.continue | type == "boolean") and (.continue == false)' "$file" 2>/dev/null)"
+  reason="$(jq -r '.stopReason // empty' "$file" 2>/dev/null)"
+  if [ "$is_false" = true ] && printf '%s' "$reason" | grep -Eqi 'needs human'; then
+    pass "$label"
+  else
+    fail "$label (expected terminal needs-human JSON)"
+  fi
+}
+
 gate_once() {
   local platform="$1" input="$2" state="$3" command="$4" cap="$5" surface="$6" root="$7" script
   case "$platform" in
@@ -78,13 +93,18 @@ for platform in claude codex; do
   TEST_COUNT=$((TEST_COUNT + 1))
   if [ -n "$count_file" ]; then pass "$platform creates a session-keyed counter"; else fail "$platform creates a session-keyed counter"; fi
   if [ -n "$count_file" ]; then
-    printf 'corrupt' > "$count_file"
-    corrupt_marker="$TEST_TMP/$platform-corrupt-command-ran"
-    corrupt_command="printf ran > '$corrupt_marker'; false"
-    gate_once "$platform" "$input" "$corrupt_state" "$corrupt_command" 8 'surface.txt' "$root"
-    assert_success "$platform corrupt counter returns a hook-valid status"
-    assert_terminal_json "$RUN_OUT" "$platform corrupt counter fails closed before gate execution"
-    assert_path_absent "$corrupt_marker" "$platform corrupt counter never executes GATE_CMD"
+    assert_mode_600 "$count_file" "$platform counter is mode 0600"
+    invalid_index=0
+    for invalid_count in corrupt '' 1234567890123456789; do
+      invalid_index=$((invalid_index + 1))
+      printf '%s' "$invalid_count" > "$count_file"
+      corrupt_marker="$TEST_TMP/$platform-corrupt-command-ran-$invalid_index"
+      corrupt_command="printf ran > '$corrupt_marker'; false"
+      gate_once "$platform" "$input" "$corrupt_state" "$corrupt_command" 8 'surface.txt' "$root"
+      assert_success "$platform invalid counter '$invalid_count' returns a hook-valid status"
+      assert_terminal_json "$RUN_OUT" "$platform invalid counter '$invalid_count' fails closed before gate execution"
+      assert_path_absent "$corrupt_marker" "$platform invalid counter '$invalid_count' never executes GATE_CMD"
+    done
   fi
 done
 
