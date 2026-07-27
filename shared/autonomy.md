@@ -28,10 +28,10 @@ lower it.
 | Class | Trigger | Decision |
 |---|---|---|
 | **0** read / inert | no state change (read, list, typecheck, dry-run) | **AUTO** |
-| **1** reversible + repo-local | undoable, in-workspace, ~free (edit a file, local commit) | **AUTO** — log if it resolved an ambiguity |
+| **1** reversible + repo-local | undoable, in-workspace, ~free (edit a file; commit only with user or repository-policy authority) | **AUTO** — log if it resolved an ambiguity |
 | **2** reversible but wide | big blast radius / effortful undo (mass rename, dependency bump, schema migration on a scratch DB) | **AUTO + checkpoint** |
-| **3** irreversible / external / costs money / crosses trust boundary | prod deploy or DB write, any external send, payment, delete **outside** the repo, **changing the top objective / acceptance criteria** | **CONFIRM ALWAYS** |
-| **4** prohibited | on the deny-list below | **DENY** (hard block) |
+| **3** irreversible / external / costs money / crosses trust boundary | prod deploy or DB write, any external send, payment, delete **outside** the repo, **changing the top objective / acceptance criteria** | **EXPLICIT BOUNDED HUMAN AUTHORIZATION** |
+| **4** prohibited unattended | on the deny-list below | **DENY DURING UNATTENDED EXECUTION** |
 
 Note **Class 3 includes editing the goal itself** — changing the top objective or the
 acceptance gate is a trust-boundary crossing, never an auto decision.
@@ -51,17 +51,19 @@ On a fork where the choice is **Class ≤ 2**, do not stop and do not guess sile
 
 3. Keep the action reversible and **surface it at the next checkpoint** for veto.
 
-If the fork is **Class 3** → CONFIRM (stop and ask / propose-and-checkpoint). If **Class 4**
-→ DENY. A `MUST-ASK` fact (an absolute threshold, the definition of done, a decomposition
+If the fork is **Class 3** → stop until explicit, bounded human authorization names the action,
+target, limit, and validity window. If **Class 4** → deny during unattended execution and hand the
+controlled workflow to a human. A `MUST-ASK` fact (an absolute threshold, the definition of done, a decomposition
 spec) is never auto-resolved this way — decide-and-log is for reversible judgment calls,
 not for inventing facts.
 
-## Hard deny-list (Class 4 — evaluated FIRST)
+## Unattended deny-list (Class 4 — evaluated FIRST)
 
-Deny is checked **before** any allowlist and **applies even in bypass mode** — as a
+Deny is checked **before** any allowlist and **applies to unattended execution even in bypass
+mode** — as a
 *classification rule the agent obeys*, not a guarantee the string-matching hook can enforce
-against an adversary (see "the sandbox is the boundary" below). These are hard blocks,
-never auto, never confirmable-into-yes by the doer:
+against an adversary (see "the sandbox is the boundary" below). The unattended agent cannot
+confirm these actions into permission; a human must use a separately controlled workflow.
 
 - **Spend money** — purchases, paid API calls beyond budget, provisioning billable resources.
 - **Delete or modify outside the workspace** — anything beyond the scoped repo/dir.
@@ -99,30 +101,21 @@ The deny-list and gate sit *inside* that sandbox as **extra layers** that cut no
 honest mistakes — **not instead of it**. If the only thing between an unattended agent and
 your production network is a bash regex, you have no boundary.
 
-**The hardened scripts now fail closed.** `assets/deny-list.sh` **denies on un-parseable or
-uncertain input** instead of waving it through, and the gate's iteration counter lives in a
-file **outside the repo** (so the agent under gate can't rewrite its own budget); if that
-state is missing or unwritable, the gate **stops the loop and escalates to a human** rather
-than continue unbounded. This raises the bar against *accidental* bypass — it does not make
-string-matching sound against an adversary.
-
-**Known escape — even the backstop has a hole.** A documented bug (claude-code #47810) can
-bypass `--dangerously-skip-permissions` + `PreToolUse` hooks **after a background task
-completes**. One more reason the hooks cannot be the boundary.
+**The hardened scripts fail closed on uncertain tool input and invalid gate state.** The gate
+counter should live outside the repository, but it is tamper-resistant only when sandbox
+permissions prevent the worker from writing that state directory. Location alone is not a
+control. This raises the bar against accidental bypass; it does not make string matching sound
+against an adversary.
 
 Inside the sandbox, the deterministic layers still earn their place:
 
-- **`PreToolUse` deny-list hook** (`assets/deny-list.sh`) — fail-closed block of Class-4 shell
-  footguns.
-  - **Claude:** intercepts tool calls broadly.
-  - **Codex caveat:** `PreToolUse` intercepts **shell only** (not Edit/Write) → **pair it
-    with workspace/dir scoping** so file-level dangers are covered.
+- **`PreToolUse` deny-list hook** (`assets/deny-list.sh`) — fail-closed block of the tool inputs it
+  recognizes. Coverage and exceptions are platform facts documented in each adapter.
 - **Workspace / dir scoping** — belt-and-braces with the sandbox's read-only mounts.
 - **Session cost budget** + **iteration cap** — hard stops so an unattended loop can't burn
   the night away.
-- **Out-of-repo gate counter + kill-switch** — a stop the agent under gate can't edit around
-  (its state lives outside the writable tree), **recursive to subagents** (a spawned agent
-  inherits the same bounds and deny-list).
+- **Sandbox-protected gate counter + kill-switch** — keep state outside the repository and deny
+  worker writes to its state directory; apply the same bounds and policy to subagents.
 
 **Bottom line:** unattended autonomy is safe only **inside an OS-level sandbox**. Within it,
 every Class-≤2 judgment call is recorded + reversible + surfaced, the run sits inside a

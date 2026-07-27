@@ -1,8 +1,8 @@
-# Deterministic gates (Claude Code)
+# Deterministic gates
 
-Claude's native `/goal` evaluator reads the **transcript only — it runs no tools.**
-So it can be fooled by a confident "tests pass." Real verification comes from one of
-two gate layers. Use both for anything unattended.
+Platform goal evaluators and model completion signals are not deterministic verification. Real
+verification comes from two gate layers. Use both for anything unattended; see the platform
+adapter for current wiring and hook contracts.
 
 ## Layer 1 — condition-level gate (lives in the goal text)
 
@@ -21,37 +21,21 @@ A **Stop-hook script actually runs the command** in a fresh process, independent
 anything the doer says. The checker is now **code, not the model** — the true
 maker/checker separation. Recommended for every unattended / bypass run.
 
-## Claude Stop-hook contract (use exactly)
-
-- Configured in `.claude/settings.json` under `hooks.Stop[].hooks[]` as
-  `{"type":"command","command":"…"}`. The **matcher is ignored** for `Stop`.
-- **exit 0 + stdout `{"decision":"block","reason":"…"}`** → Claude **KEEPS working**;
-  `reason` is fed back to it as guidance.
-- **clean exit 0 with no block** → Claude **may stop**.
-- **exit 2 + stderr** → also blocks (stderr becomes the guidance).
-- The hook's JSON **stdin** may carry `stop_hook_active` — reported `true` when this `Stop`
-  fired *because a previous block already made Claude continue*. Treat it as a **runtime
-  loop-guard flag, not a documented guarantee** (it isn't in the current hooks reference);
-  cross-check it against `stop_reason`, and rely on the persisted out-of-repo counter (below)
-  as the real bound. Honor it as a *secondary* fail-safe, not the thing that keeps the gate
-  from looping.
-
 ## Mandatory iteration counter (bound the strongest gate)
 
 The strongest gate is also the easiest to turn into an infinite, budget-burning loop.
 Bound it with a **persisted counter** — and put that counter **out of the agent's reach**:
 
-- Persist the attempt count **outside the repo**, in a path the agent under gate can't write
-  (e.g. `$XDG_STATE_HOME/goal-gate/<repo-id>.count`) — **never** at repo root. A counter the
-  doer can edit is not a bound; it's a suggestion the agent can reset to dodge the cap.
+- Persist the attempt count **outside the repo** in a state directory that the sandbox policy
+  prevents the worker from writing directly. An out-of-repository path alone is not
+  tamper-resistant: filesystem permissions are the control.
 - Each **fail → block** increments it; each **clean pass** removes it (loop over).
-- On **`count ≥ N`** emit **allow-stop** with reason
-  **"iteration cap hit — needs human"**, *regardless of pass/fail*. The cap wins.
-- **Fail closed on unwritable state:** if the out-of-repo counter is missing or can't be
-  written, treat the run as unbounded-risk — **stop the loop and escalate to a human**
-  (needs-human), never continue looping and never silently pass. The persisted out-of-repo
-  counter is the **real bound**; `stop_hook_active` (below) is only a secondary loop-guard.
-- Default **N = 5**. A gate that can loop forever is a cost risk, not automation.
+- On **`count ≥ N`**, stop the loop and report **"iteration cap hit — needs human"**. The cap wins.
+- A missing counter initializes at zero. **Fail closed on unreadable, malformed, or unwritable
+  state:** stop the loop and escalate to a human (needs-human), never continue unbounded.
+  The configured cap plus sandbox-protected state is the real bound.
+- Require an explicit trusted `GATE_CMD` and an explicit positive `GOAL_GATE_CAP`. There is no
+  implicit `pytest` command and no default cap.
 
 ## Keep verifiers tiny — run → compare → block/allow
 
@@ -65,26 +49,9 @@ The hook does exactly three things: **run** the command, **read** its exit code,
 - The block `reason` should point at the code, e.g. "fix without editing/deleting tests" —
   never suggest weakening the check.
 
-## Wire it into `.claude/settings.json`
-
-```json
-{
-  "hooks": {
-    "Stop": [
-      {
-        "hooks": [
-          { "type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/gate.claude.sh" }
-        ]
-      }
-    ]
-  }
-}
-```
-
-Notes:
-- The `matcher` key is intentionally omitted — it is ignored for `Stop`.
-- Use an absolute path or `$CLAUDE_PROJECT_DIR` (Claude sets it to the project root).
-- `chmod +x` the script. Ready-made example (gates on `pytest -q`): **`assets/gate.claude.sh`**.
+Ready-made scripts are `assets/gate.claude.sh` and `assets/gate.codex.sh`. Copy the relevant
+script into the repository hook location, make it executable, configure its trusted command and
+cap in the hook environment, and use the adapter's current platform wiring.
 
 ## Pair with a `PreToolUse` deny-list — a backstop, not a boundary (unattended / bypass)
 
