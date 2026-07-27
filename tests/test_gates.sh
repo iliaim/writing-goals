@@ -28,6 +28,17 @@ gate_once() {
     GATE_SURFACE="$surface" bash "$script"
 }
 
+gate_without_state_home() {
+  local platform="$1" input="$2" command="$3" root="$4" script
+  case "$platform" in
+    claude) script="$REPO_DIR/assets/gate.claude.sh" ;;
+    codex) script="$REPO_DIR/assets/gate.codex.sh" ;;
+  esac
+  run_input "$input" env -u HOME -u XDG_STATE_HOME \
+    CLAUDE_PROJECT_DIR="$root" GATE_CMD="$command" GOAL_GATE_CAP=8 \
+    GATE_SURFACE='surface.txt' bash "$script"
+}
+
 input_for() {
   local platform="$1" root="$2" session="$3"
   if [ "$platform" = codex ]; then
@@ -60,6 +71,13 @@ for platform in claude codex; do
   gate_once "$platform" "$input" "$state" true 8 'missing-*' "$root"
   assert_success "$platform unresolved GATE_SURFACE fails closed"
   assert_terminal_json "$RUN_OUT" "$platform rejects an unresolved GATE_SURFACE"
+
+  no_home_marker="$TEST_TMP/$platform-no-home-command-ran"
+  no_home_command="printf ran > '$no_home_marker'; false"
+  gate_without_state_home "$platform" "$input" "$no_home_command" "$root"
+  assert_success "$platform missing HOME and XDG_STATE_HOME returns a hook-valid status"
+  assert_terminal_json "$RUN_OUT" "$platform missing state-home configuration fails terminally"
+  assert_path_absent "$no_home_marker" "$platform missing state-home configuration never executes GATE_CMD"
 
   green_state="$TEST_TMP/green-$platform"
   mkdir -p "$green_state"
@@ -105,6 +123,15 @@ for platform in claude codex; do
       assert_terminal_json "$RUN_OUT" "$platform invalid counter '$invalid_count' fails closed before gate execution"
       assert_path_absent "$corrupt_marker" "$platform invalid counter '$invalid_count' never executes GATE_CMD"
     done
+
+    rm -f "$count_file"
+    ln -s "$corrupt_state/missing-counter-target" "$count_file"
+    dangling_marker="$TEST_TMP/$platform-dangling-counter-command-ran"
+    dangling_command="printf ran > '$dangling_marker'; false"
+    gate_once "$platform" "$input" "$corrupt_state" "$dangling_command" 8 'surface.txt' "$root"
+    assert_success "$platform dangling counter returns a hook-valid status"
+    assert_terminal_json "$RUN_OUT" "$platform dangling counter fails terminally"
+    assert_path_absent "$dangling_marker" "$platform dangling counter never executes GATE_CMD"
   fi
 done
 

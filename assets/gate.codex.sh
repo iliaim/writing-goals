@@ -97,7 +97,14 @@ key_digest="$(printf '%s' "${REPO_ROOT}|${session_id}|${transcript_path}" | sha_
   terminal "the session key could not be hashed."
 KEY="${key_digest:0:16}"
 
-STATE_ROOT="${XDG_STATE_HOME:-${HOME:?HOME is required}/.local/state}/writing-goals"
+if [ -n "${XDG_STATE_HOME:-}" ]; then
+  STATE_BASE="$XDG_STATE_HOME"
+elif [ -n "${HOME:-}" ]; then
+  STATE_BASE="$HOME/.local/state"
+else
+  terminal "neither XDG_STATE_HOME nor HOME supplies a state location."
+fi
+STATE_ROOT="$STATE_BASE/writing-goals"
 COUNT_FILE="$STATE_ROOT/gate-count-$KEY"
 SURFACE_FILE="$STATE_ROOT/gate-surface-$KEY"
 OUTPUT_FILE="$STATE_ROOT/gate-output-$KEY.log"
@@ -105,6 +112,23 @@ umask 077
 if ! mkdir -p "$STATE_ROOT" 2>/dev/null; then
   terminal "cannot create state directory '$STATE_ROOT' (stop_hook_active=$stop_hook_active)."
 fi
+
+TEMP_FILE=""
+cleanup_temp() {
+  if [ -n "$TEMP_FILE" ]; then
+    rm -f "$TEMP_FILE" 2>/dev/null || true
+  fi
+}
+trap cleanup_temp EXIT
+trap 'cleanup_temp; exit 1' HUP INT TERM
+
+make_temp() {
+  TEMP_FILE="$(mktemp "$STATE_ROOT/.gate-state-$KEY.XXXXXX" 2>/dev/null)" ||
+    terminal "a secure state temporary file could not be created."
+  if [ ! -f "$TEMP_FILE" ] || [ -L "$TEMP_FILE" ] || ! chmod 600 "$TEMP_FILE"; then
+    terminal "the secure state temporary file is unusable."
+  fi
+}
 
 surface_hash() {
   (
@@ -123,8 +147,8 @@ surface_hash() {
 
 cur_surface="$(surface_hash)" ||
   terminal "GATE_SURFACE='$GATE_SURFACE' did not resolve completely or could not be hashed."
-if [ -e "$SURFACE_FILE" ]; then
-  if [ ! -f "$SURFACE_FILE" ] || [ ! -r "$SURFACE_FILE" ]; then
+if [ -e "$SURFACE_FILE" ] || [ -L "$SURFACE_FILE" ]; then
+  if [ -L "$SURFACE_FILE" ] || [ ! -f "$SURFACE_FILE" ] || [ ! -r "$SURFACE_FILE" ]; then
     terminal "verification-surface state is not a readable regular file."
   fi
   prev_surface="$(cat "$SURFACE_FILE")" ||
@@ -133,18 +157,18 @@ if [ -e "$SURFACE_FILE" ]; then
     terminal "the verification surface changed during this session."
   fi
 else
-  surface_tmp="$STATE_ROOT/.gate-surface-$KEY.$$"
+  make_temp
+  surface_tmp="$TEMP_FILE"
   if ! printf '%s\n' "$cur_surface" >"$surface_tmp" ||
-     ! chmod 600 "$surface_tmp" ||
      ! mv -f "$surface_tmp" "$SURFACE_FILE"; then
-    rm -f "$surface_tmp" 2>/dev/null || true
     terminal "verification-surface state could not be persisted."
   fi
+  TEMP_FILE=""
 fi
 
 count=0
-if [ -e "$COUNT_FILE" ]; then
-  if [ ! -f "$COUNT_FILE" ] || [ ! -r "$COUNT_FILE" ]; then
+if [ -e "$COUNT_FILE" ] || [ -L "$COUNT_FILE" ]; then
+  if [ -L "$COUNT_FILE" ] || [ ! -f "$COUNT_FILE" ] || [ ! -r "$COUNT_FILE" ]; then
     terminal "attempt state is not a readable regular file."
   fi
   count="$(cat "$COUNT_FILE")" || terminal "attempt state could not be read."
@@ -160,26 +184,33 @@ if [ "$count" -ge "$CAP" ]; then
   terminal "the attempt cap was already reached ($count/$CAP)."
 fi
 
-output_tmp="$STATE_ROOT/.gate-output-$KEY.$$"
+if [ -e "$OUTPUT_FILE" ] || [ -L "$OUTPUT_FILE" ]; then
+  if [ -L "$OUTPUT_FILE" ] || [ ! -f "$OUTPUT_FILE" ]; then
+    terminal "gate-output state is not a regular file."
+  fi
+fi
+make_temp
+output_tmp="$TEMP_FILE"
 (cd "$REPO_ROOT" && eval "$GATE_CMD") >"$output_tmp" 2>&1
 rc=$?
 if [ "$rc" -eq 0 ]; then
   rm -f "$output_tmp" "$COUNT_FILE" "$OUTPUT_FILE" 2>/dev/null || true
+  TEMP_FILE=""
   exit 0
 fi
-if ! chmod 600 "$output_tmp" || ! mv -f "$output_tmp" "$OUTPUT_FILE"; then
-  rm -f "$output_tmp" 2>/dev/null || true
+if ! mv -f "$output_tmp" "$OUTPUT_FILE"; then
   terminal "failing gate output could not be persisted."
 fi
+TEMP_FILE=""
 
 count=$((count + 1))
-count_tmp="$STATE_ROOT/.gate-count-$KEY.$$"
+make_temp
+count_tmp="$TEMP_FILE"
 if ! printf '%s\n' "$count" >"$count_tmp" ||
-   ! chmod 600 "$count_tmp" ||
    ! mv -f "$count_tmp" "$COUNT_FILE"; then
-  rm -f "$count_tmp" 2>/dev/null || true
   terminal "attempt state could not be persisted atomically."
 fi
+TEMP_FILE=""
 written="$(cat "$COUNT_FILE")" || terminal "attempt state could not be verified."
 if [ "$written" != "$count" ]; then
   terminal "attempt state did not persist correctly."
