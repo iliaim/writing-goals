@@ -91,6 +91,17 @@ case "$TOOL" in
   *) exit 0 ;;
 esac
 
+# The bounded shell parser below is intentionally single-line. Failing closed
+# is safer than erasing command boundaries or pretending to understand quoted
+# newlines. Multiline apply_patch programs are validated separately.
+case "$TOOL" in
+  Bash|bash|shell|Shell)
+    case "$CMD_RAW" in
+      *$'\n'*|*$'\r'*) deny "multiline shell commands are outside the bounded parser contract — failing closed." ;;
+    esac
+    ;;
+esac
+
 # ---- 1) normalize: join backslash-newline, newlines/tabs -> spaces ----------
 # A `\`+newline (line continuation) or a raw newline would otherwise split a
 # command across "lines" and defeat every single-line pattern below.
@@ -342,10 +353,10 @@ if [ "$TOOL" = "apply_patch" ]; then
       '*** '*' File: '*)
         deny "apply_patch contains an unrecognized operation header."
         ;;
+      '*** Rename:'*|'*** Rename File:'*|'*** Copy:'*|'*** Copy File:'*|'*** Create File:'*|'*** Remove File:'*)
+        deny "apply_patch contains an unrecognized operation header."
+        ;;
       *)
-        case "$patch_line" in
-          '*** '[A-Za-z]*':'*) deny "apply_patch contains an unrecognized control header." ;;
-        esac
         # Hunk content is intentionally opaque. In particular, a legitimate
         # content line may itself begin with "*** ".
         ;;
@@ -505,7 +516,8 @@ find_command_index() {
           value="$(strip_token_quotes "${TOKENS[$pos]}")"
           if is_assignment_token "$value"; then pos=$((pos + 1)); continue; fi
           case "$value" in
-            -u|--unset) pos=$((pos + 2)) ;;
+            -u|--unset|-C|--chdir) pos=$((pos + 2)) ;;
+            --chdir=*) pos=$((pos + 1)) ;;
             -*) pos=$((pos + 1)) ;;
             *) break ;;
           esac
@@ -516,6 +528,17 @@ find_command_index() {
         while [ "$pos" -lt "$end" ]; do
           value="$(strip_token_quotes "${TOKENS[$pos]}")"
           case "$value" in -*) pos=$((pos + 1)) ;; *) break ;; esac
+        done
+        ;;
+      exec)
+        pos=$((pos + 1))
+        while [ "$pos" -lt "$end" ]; do
+          value="$(strip_token_quotes "${TOKENS[$pos]}")"
+          case "$value" in
+            -a) pos=$((pos + 2)) ;;
+            -*) pos=$((pos + 1)) ;;
+            *) break ;;
+          esac
         done
         ;;
       sudo)

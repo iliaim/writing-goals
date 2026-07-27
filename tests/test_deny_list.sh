@@ -77,6 +77,13 @@ run_hook "$root" Bash "sed --line-length 80 -i '' '/pattern/d' safe.txt" "$root"
 assert_allowed 'in-place sed consumes recognized option arguments before its program'
 run_hook "$root" Bash "sed -i.bak 's/one/two/' safe.txt $outside/file" "$root"
 assert_denied 'in-place sed backup suffix still checks every target'
+run_hook "$root" Bash "echo okay
+sed -i '' 's/one/two/' $outside/file" "$root"
+assert_denied 'multiline shell input containing in-place sed fails closed'
+run_hook "$root" Bash "env --chdir=. sed -i '' 's/one/two/' $outside/file" "$root"
+assert_denied 'env chdir wrapped in-place sed is inspected'
+run_hook "$root" Bash "exec sed -i '' 's/one/two/' $outside/file" "$root"
+assert_denied 'exec wrapped in-place sed is inspected'
 
 run_hook "$root" Bash 'gh pr create'
 assert_denied 'gh is denied as an external mutator'
@@ -90,6 +97,17 @@ run_hook "$root" Bash 'X=1 gh pr create'
 assert_denied 'single-letter assignment wrapped gh invocation is denied'
 run_hook "$root" Bash '/usr/bin/glab mr create'
 assert_denied 'absolute glab invocation is denied'
+run_hook "$root" Bash "echo okay
+gh pr create" "$root"
+assert_denied 'multiline shell input containing gh fails closed'
+run_hook "$root" Bash 'exec gh pr create'
+assert_denied 'exec wrapped gh invocation is denied'
+run_hook "$root" Bash 'env -C . gh pr create'
+assert_denied 'env short chdir wrapped gh invocation is denied'
+run_hook "$root" Bash 'env --chdir . gh pr create'
+assert_denied 'env separated long chdir wrapped gh invocation is denied'
+run_hook "$root" Bash 'env --chdir=. glab mr create'
+assert_denied 'env attached long chdir wrapped glab invocation is denied'
 
 # Missing every root source is unsafe for a recognized mutator.
 payload="$(jq -cn --arg command 'touch unknown-root.txt' '{tool_name:"Bash",tool_input:{command:$command},cwd:"/does-not-exist"}')"
@@ -109,6 +127,14 @@ valid_patch='*** Begin Patch
 *** End Patch'
 run_hook "$root" apply_patch "$valid_patch" "$root"
 assert_allowed 'structured in-repository Add Update Delete patch is allowed'
+
+context_patch='*** Begin Patch
+*** Update File: safe.txt
+@@
+*** Note: ordinary context
+*** End Patch'
+run_hook "$root" apply_patch "$context_patch" "$root"
+assert_allowed 'ordinary colon-bearing star-prefixed patch context is allowed'
 
 for symlink_patch in \
   '*** Begin Patch
