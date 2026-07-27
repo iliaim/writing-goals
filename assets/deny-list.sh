@@ -162,20 +162,68 @@ collapse() {
   printf '%s' "$res"
 }
 
-# resolve symlinks of the deepest EXISTING ancestor, then re-append the tail.
-# Handles targets that don't exist yet (writes) while still following symlinks.
+# Resolve each existing component without relying on GNU-only `readlink -f`.
+# Dangling links are rejected; nonexistent ordinary tails remain valid writes.
 resolve_phys() {
-  local p="$1" existing="$1" rest="" phys
-  while [ ! -e "$existing" ] && [ "$existing" != "/" ] && [ -n "$existing" ]; do
-    rest="/$(basename "$existing")$rest"
-    existing="$(dirname "$existing")"
+  local p pending part rest resolved="" candidate target depth=0
+  p="$1"
+  pending="${p#/}"
+
+  while [ -n "$pending" ]; do
+    case "$pending" in
+      */*) part="${pending%%/*}"; rest="${pending#*/}" ;;
+      *) part="$pending"; rest="" ;;
+    esac
+    case "$part" in
+      ''|.)
+        pending="$rest"
+        continue
+        ;;
+      ..)
+        resolved="$(dirname "${resolved:-/}")"
+        pending="$rest"
+        continue
+        ;;
+    esac
+    if [ -z "$resolved" ] || [ "$resolved" = "/" ]; then
+      candidate="/$part"
+    else
+      candidate="$resolved/$part"
+    fi
+
+    if [ -L "$candidate" ]; then
+      depth=$((depth + 1))
+      [ "$depth" -le 40 ] || return 1
+      target="$(readlink "$candidate" 2>/dev/null)" || return 1
+      case "$target" in
+        /*)
+          [ -e "$target" ] || [ -L "$target" ] || return 1
+          pending="${target#/}"
+          resolved=""
+          ;;
+        *)
+          target="${resolved:-/}/$target"
+          [ -e "$target" ] || [ -L "$target" ] || return 1
+          pending="$target"
+          resolved=""
+          ;;
+      esac
+      [ -n "$rest" ] && pending="$pending/$rest"
+      continue
+    fi
+
+    if [ -e "$candidate" ]; then
+      [ -z "$rest" ] || [ -d "$candidate" ] || return 1
+      resolved="$candidate"
+      pending="$rest"
+      continue
+    fi
+
+    resolved="$candidate"
+    pending="$rest"
   done
-  if [ -d "$existing" ]; then
-    phys="$(cd -P "$existing" 2>/dev/null && pwd -P)" || { printf '%s' "$p"; return 0; }
-    printf '%s%s' "$phys" "$rest"
-  else
-    printf '%s' "$p"
-  fi
+
+  printf '%s' "${resolved:-/}"
 }
 
 is_inside() {
@@ -223,8 +271,9 @@ check_target() {
     /*) : ;;
     *) t="$REPO_PHYS/$t" ;;
   esac
-  t="$(collapse "$t")"
-  t="$(resolve_phys "$t")"
+  if ! t="$(resolve_phys "$t")"; then
+    deny "write/delete target crosses a dangling, cyclic, or non-traversable path ('$t') — failing closed."
+  fi
   if ! is_inside "$t"; then
     deny "write/delete target resolves OUTSIDE the repo root ('$t' not under '$REPO_PHYS')."
   fi
@@ -294,6 +343,9 @@ if [ "$TOOL" = "apply_patch" ]; then
         deny "apply_patch contains an unrecognized operation header."
         ;;
       *)
+        case "$patch_line" in
+          '*** '[A-Za-z]*':'*) deny "apply_patch contains an unrecognized control header." ;;
+        esac
         # Hunk content is intentionally opaque. In particular, a legitimate
         # content line may itself begin with "*** ".
         ;;
@@ -352,10 +404,6 @@ done
 NET_SENDERS='(curl|wget|nc|ncat|netcat|scp|sftp|rsync|ssh|telnet|ftp|tftp|mail|mailx|sendmail)'
 if has "(^|[[:space:];|&(/])${NET_SENDERS}([[:space:]]|\$)"; then
   deny "outbound network sender detected. Even a POST to an allowlisted host can exfiltrate; egress control belongs at the sandbox/proxy layer, so senders are denied here by default."
-fi
-
-if has '(^|[[:space:];|&(/])(gh|glab)([[:space:]]|$)'; then
-  deny "external repository mutator (gh/glab) is denied in unattended runs."
 fi
 
 # ---- 4) package installs (default-deny package managers as a class) --------
@@ -426,6 +474,138 @@ read -ra TOKENS <<< "$PADDED"
 NTOK=${#TOKENS[@]}
 
 is_sep() { case "$1" in ';'|'|'|'&'|'('|')') return 0 ;; *) return 1 ;; esac; }
+strip_token_quotes() {
+  local value="$1"
+  case "$value" in
+    \"*\") value="${value#\"}"; value="${value%\"}" ;;
+    \'*\') value="${value#\'}"; value="${value%\'}" ;;
+  esac
+  printf '%s' "$value"
+}
+
+is_assignment_token() {
+  local value="$1" name
+  case "$value" in *=*) name="${value%%=*}" ;; *) return 1 ;; esac
+  printf '%s' "$name" | grep -Eq '^[A-Za-z_][A-Za-z0-9_]*$'
+}
+
+# Locate the executable in one ordinary command segment. Only common
+# transparent wrappers are understood; this deliberately is not a shell parser.
+find_command_index() {
+  local pos="$1" end="$2" value base
+  COMMAND_INDEX=-1
+  while [ "$pos" -lt "$end" ]; do
+    value="$(strip_token_quotes "${TOKENS[$pos]}")"
+    if is_assignment_token "$value"; then pos=$((pos + 1)); continue; fi
+    base="${value##*/}"
+    case "$base" in
+      env)
+        pos=$((pos + 1))
+        while [ "$pos" -lt "$end" ]; do
+          value="$(strip_token_quotes "${TOKENS[$pos]}")"
+          if is_assignment_token "$value"; then pos=$((pos + 1)); continue; fi
+          case "$value" in
+            -u|--unset) pos=$((pos + 2)) ;;
+            -*) pos=$((pos + 1)) ;;
+            *) break ;;
+          esac
+        done
+        ;;
+      command|builtin|nohup)
+        pos=$((pos + 1))
+        while [ "$pos" -lt "$end" ]; do
+          value="$(strip_token_quotes "${TOKENS[$pos]}")"
+          case "$value" in -*) pos=$((pos + 1)) ;; *) break ;; esac
+        done
+        ;;
+      sudo)
+        pos=$((pos + 1))
+        while [ "$pos" -lt "$end" ]; do
+          value="$(strip_token_quotes "${TOKENS[$pos]}")"
+          case "$value" in
+            -u|-g|-h|-p|-C|-T) pos=$((pos + 2)) ;;
+            -*) pos=$((pos + 1)) ;;
+            *) break ;;
+          esac
+        done
+        ;;
+      *)
+        COMMAND_INDEX="$pos"
+        return 0
+        ;;
+    esac
+  done
+}
+
+inspect_sed_segment() {
+  local command_index="$1" end="$2" pos value
+  local in_place=0 explicit_program=0 options=1
+  pos=$((command_index + 1))
+
+  while [ "$pos" -lt "$end" ] && [ "$options" -eq 1 ]; do
+    value="$(strip_token_quotes "${TOKENS[$pos]}")"
+    case "$value" in
+      --)
+        options=0
+        pos=$((pos + 1))
+        ;;
+      -e|--expression)
+        explicit_program=1
+        pos=$((pos + 2))
+        ;;
+      -e?*|--expression=*)
+        explicit_program=1
+        pos=$((pos + 1))
+        ;;
+      -f|--file)
+        explicit_program=1
+        pos=$((pos + 2))
+        ;;
+      -f?*|--file=*)
+        explicit_program=1
+        pos=$((pos + 1))
+        ;;
+      -l|--line-length)
+        pos=$((pos + 2))
+        ;;
+      --line-length=*)
+        pos=$((pos + 1))
+        ;;
+      -i|--in-place)
+        in_place=1
+        pos=$((pos + 1))
+        if [ "$pos" -lt "$end" ]; then
+          value="${TOKENS[$pos]}"
+          case "$value" in "''"|'""'|.*) pos=$((pos + 1)) ;; esac
+        fi
+        ;;
+      --in-place=*|-i?*|-[A-Za-z]*i*)
+        in_place=1
+        pos=$((pos + 1))
+        if [ "$pos" -lt "$end" ]; then
+          value="${TOKENS[$pos]}"
+          case "$value" in "''"|'""') pos=$((pos + 1)) ;; esac
+        fi
+        ;;
+      -*) pos=$((pos + 1)) ;;
+      *) options=0 ;;
+    esac
+  done
+
+  [ "$in_place" -eq 1 ] || return 0
+  [ -n "$REPO_PHYS" ] || deny "no valid repository root is available; cannot validate in-place sed targets."
+
+  # Without -e/-f, the first non-option operand is the edit program.
+  if [ "$explicit_program" -eq 0 ] && [ "$pos" -lt "$end" ]; then
+    pos=$((pos + 1))
+  fi
+  while [ "$pos" -lt "$end" ]; do
+    value="$(strip_token_quotes "${TOKENS[$pos]}")"
+    [ "$value" = "--" ] || check_target "$value"
+    pos=$((pos + 1))
+  done
+}
+
 is_destructive() {
   # match on the basename so an absolute path (/bin/rm) is caught too
   case "${1##*/}" in
@@ -463,25 +643,31 @@ while [ "$i" -lt "$NTOK" ]; do
   i=$((i+1))
 done
 
-# In-place sed mutates each file operand. We deliberately check every
-# non-option token after sed: treating the edit program as a repo-relative
-# candidate is harmless, while overlooking a file operand is not.
-if has '(^|[[:space:];|&(/])sed[[:space:]]+-[^[:space:]]*i[^[:space:]]*([[:space:]]|$)'; then
-  seen_sed=0
-  i=0
-  while [ "$i" -lt "$NTOK" ]; do
-    tok="${TOKENS[$i]}"
-    if [ "$seen_sed" -eq 1 ]; then
-      is_sep "$tok" && break
-      case "$tok" in
-        -*) : ;;
-        *) check_target "$tok" ;;
-      esac
+# Inspect the executable in every ordinary command segment. This keeps gh/glab
+# matching out of argument positions and ensures a later in-place sed is not
+# skipped after an earlier read-only command.
+segment_start=0
+i=0
+while [ "$i" -le "$NTOK" ]; do
+  if [ "$i" -eq "$NTOK" ] || is_sep "${TOKENS[$i]}"; then
+    if [ "$segment_start" -lt "$i" ]; then
+      find_command_index "$segment_start" "$i"
+      if [ "$COMMAND_INDEX" -ge 0 ]; then
+        command_token="$(strip_token_quotes "${TOKENS[$COMMAND_INDEX]}")"
+        case "${command_token##*/}" in
+          gh|glab)
+            deny "external repository mutator (gh/glab) is denied in unattended runs."
+            ;;
+          sed)
+            inspect_sed_segment "$COMMAND_INDEX" "$i"
+            ;;
+        esac
+      fi
     fi
-    [ "${tok##*/}" = "sed" ] && seen_sed=1
-    i=$((i+1))
-  done
-fi
+    segment_start=$((i + 1))
+  fi
+  i=$((i + 1))
+done
 
 # find ... -delete  /  find ... -exec <destructive> : check the search roots
 if has '(^|[[:space:];|&(/])find([[:space:]]|$)' && \

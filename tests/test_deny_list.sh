@@ -24,8 +24,12 @@ assert_allowed() {
 
 root="$TEST_TMP/repo"
 outside="$TEST_TMP/outside"
-mkdir -p "$root/subdir" "$outside"
+mkdir -p "$root/subdir" "$outside/dir"
 printf 'one\n' > "$root/safe.txt"
+printf 'outside\n' > "$outside/existing.txt"
+ln -s "$outside/existing.txt" "$root/link-file"
+ln -s "$outside/missing.txt" "$root/link-dangling"
+ln -s "$outside/dir" "$root/link-dir"
 
 # A valid payload cwd is authoritative over a bad environment root.
 payload="$(jq -cn --arg command 'touch payload-root.txt' --arg cwd "$root" '{tool_name:"Bash",tool_input:{command:$command},cwd:$cwd}')"
@@ -47,6 +51,12 @@ run_hook "$root" Bash "touch $outside/touched" "$root"
 assert_denied 'touch outside the repository is denied'
 run_hook "$root" Bash 'touch subdir/inside' "$root"
 assert_allowed 'touch inside the repository is allowed'
+run_hook "$root" Bash 'touch link-file' "$root"
+assert_denied 'touch through an existing-file symlink escape is denied'
+run_hook "$root" Bash 'touch link-dangling' "$root"
+assert_denied 'touch through a dangling symlink escape is denied'
+run_hook "$root" Bash 'touch link-dir/../escaped.txt' "$root"
+assert_denied 'dot-dot is resolved after following each symlink component'
 
 run_hook "$root" Bash "mkdir $outside/new-dir" "$root"
 assert_denied 'mkdir outside the repository is denied'
@@ -57,11 +67,29 @@ run_hook "$root" Bash "sed -Ei '' 's/one/two/' $outside/file" "$root"
 assert_denied 'combined-option in-place sed outside the repository is denied'
 run_hook "$root" Bash "sed -Ei '' 's/one/two/' safe.txt" "$root"
 assert_allowed 'combined-option in-place sed inside the repository is allowed'
+run_hook "$root" Bash "sed -E -i '' 's/one/two/' $outside/file" "$root"
+assert_denied 'separated in-place sed options outside the repository are denied'
+run_hook "$root" Bash "sed 's/one/two/' safe.txt; sed -i '' 's/one/two/' $outside/file" "$root"
+assert_denied 'in-place sed in a later command segment is denied'
+run_hook "$root" Bash "sed -i '' -- '/pattern/d' safe.txt subdir/inside" "$root"
+assert_allowed 'in-place sed consumes slash-address program and permits multiple in-repo targets'
+run_hook "$root" Bash "sed --line-length 80 -i '' '/pattern/d' safe.txt" "$root"
+assert_allowed 'in-place sed consumes recognized option arguments before its program'
+run_hook "$root" Bash "sed -i.bak 's/one/two/' safe.txt $outside/file" "$root"
+assert_denied 'in-place sed backup suffix still checks every target'
 
 run_hook "$root" Bash 'gh pr create'
 assert_denied 'gh is denied as an external mutator'
 run_hook "$root" Bash 'glab mr create'
 assert_denied 'glab is denied as an external mutator'
+run_hook "$root" Bash 'echo gh'
+assert_allowed 'gh mentioned as an argument is allowed'
+run_hook "$root" Bash 'env GH_HOST=example.invalid gh pr create'
+assert_denied 'wrapped gh invocation is denied'
+run_hook "$root" Bash 'X=1 gh pr create'
+assert_denied 'single-letter assignment wrapped gh invocation is denied'
+run_hook "$root" Bash '/usr/bin/glab mr create'
+assert_denied 'absolute glab invocation is denied'
 
 # Missing every root source is unsafe for a recognized mutator.
 payload="$(jq -cn --arg command 'touch unknown-root.txt' '{tool_name:"Bash",tool_input:{command:$command},cwd:"/does-not-exist"}')"
@@ -81,6 +109,21 @@ valid_patch='*** Begin Patch
 *** End Patch'
 run_hook "$root" apply_patch "$valid_patch" "$root"
 assert_allowed 'structured in-repository Add Update Delete patch is allowed'
+
+for symlink_patch in \
+  '*** Begin Patch
+*** Update File: link-file
+@@
+-outside
++changed
+*** End Patch' \
+  '*** Begin Patch
+*** Add File: link-dangling
++created outside
+*** End Patch'; do
+  run_hook "$root" apply_patch "$symlink_patch" "$root"
+  assert_denied 'apply_patch through an escaping terminal symlink is denied'
+done
 
 for bad_patch in \
   '*** Begin Patch
@@ -119,6 +162,13 @@ for bad_patch in \
 *** Add Filename: confused.txt
 *** Add File: safe.txt
 +content
+*** End Patch' \
+  '*** Begin Patch
+*** Update File: safe.txt
+*** Rename: ../escape.txt
+@@
+-old
++new
 *** End Patch' \
   '*** Begin Patch
 --- a/safe.txt
