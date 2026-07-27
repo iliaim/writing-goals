@@ -12,6 +12,21 @@ run_command env HOME="$home" CODEX_HOME="$home/.codex" bash "$sync" claude
 assert_nonzero 'default Claude install refuses a real destination'
 assert_file_contains "$home/.claude/skills/writing-goals/SKILL.md" '^do not replace$' 'default Claude refusal preserves sentinel'
 
+# Empty and partial real directories are not proof of installer ownership.
+home="$TEST_TMP/preserve-empty"
+mkdir -p "$home/.claude/skills/writing-goals"
+run_command env HOME="$home" CODEX_HOME="$home/.codex" bash "$sync" claude
+assert_nonzero 'default Claude install refuses an empty real destination'
+assert_path_absent "$home/.claude/skills/writing-goals/SKILL.md" 'empty Claude refusal leaves the destination unchanged'
+
+home="$TEST_TMP/preserve-partial"
+mkdir -p "$home/.claude/skills/writing-goals"
+ln -s "$REPO_DIR/claude/SKILL.md" "$home/.claude/skills/writing-goals/SKILL.md"
+run_command env HOME="$home" CODEX_HOME="$home/.codex" bash "$sync" claude
+assert_nonzero 'default Claude install refuses a partial installer layout'
+assert_link_target "$home/.claude/skills/writing-goals/SKILL.md" "$REPO_DIR/claude/SKILL.md" 'partial Claude refusal preserves its existing canonical link'
+assert_path_absent "$home/.claude/skills/writing-goals/shared" 'partial Claude refusal does not complete the layout'
+
 # all must preflight every requested target before creating the first one.
 home="$TEST_TMP/all-atomic"
 mkdir -p "$home/.codex/skills/writing-goals"

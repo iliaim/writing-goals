@@ -79,6 +79,12 @@ preflight_claude_destination() {
   fi
   [ -d "$claude_dest" ] || return 0
 
+  if ! link_has_target "$claude_dest/SKILL.md" "$BD/claude/SKILL.md" ||
+     ! link_has_target "$claude_dest/shared" "$BD/shared" ||
+     ! link_has_target "$claude_dest/assets" "$BD/assets"; then
+    fail "existing Claude destination is not a complete installer layout: $claude_dest" || return 1
+  fi
+
   for entry in "$claude_dest"/* "$claude_dest"/.[!.]* "$claude_dest"/..?*; do
     [ -e "$entry" ] || [ -L "$entry" ] || continue
     name="${entry##*/}"
