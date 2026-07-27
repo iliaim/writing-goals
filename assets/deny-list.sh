@@ -656,7 +656,10 @@ inspect_find_segment() {
   while [ "$pos" -lt "$end" ]; do
     value="$(strip_token_quotes "${TOKENS[$pos]}")"
     case "$value" in
-      -delete|-exec|-execdir) mutates=1 ;;
+      -exec|-execdir|-ok|-okdir)
+        deny "nested command execution through find is not safely analyzable."
+        ;;
+      -delete) mutates=1 ;;
     esac
     pos=$((pos + 1))
   done
@@ -710,6 +713,9 @@ while [ "$i" -le "$NTOK" ]; do
             ;;
           find)
             inspect_find_segment "$COMMAND_INDEX" "$i"
+            ;;
+          xargs)
+            deny "nested command execution through xargs is not safely analyzable."
             ;;
           *)
             if is_destructive "$command_token"; then

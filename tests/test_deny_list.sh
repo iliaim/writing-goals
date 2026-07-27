@@ -91,6 +91,10 @@ run_hook "$root" Bash "'/bin/mv' safe.txt $outside/quoted-mv" "$root"
 assert_denied 'quoted absolute destructive executable outside the repository is denied'
 run_hook "$root" Bash "/usr/bin/find $outside -delete" "$root"
 assert_denied 'absolute find mutation outside the repository is denied'
+run_hook "$root" Bash "find . -exec /bin/rm -f $outside/find-exec \\;" "$root"
+assert_denied 'find nested destructive execution fails closed'
+run_hook "$root" Bash "printf x | xargs rm -f $outside/xargs-rm" "$root"
+assert_denied 'xargs nested destructive execution fails closed'
 
 run_hook "$root" Bash 'gh pr create'
 assert_denied 'gh is denied as an external mutator'
