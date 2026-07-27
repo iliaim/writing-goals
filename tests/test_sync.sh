@@ -4,6 +4,19 @@ set -u
 
 sync="$REPO_DIR/sync.sh"
 
+# A damaged selected adapter is an error, never a successful skip.
+for missing_member in SKILL.md agents/openai.yaml shared assets; do
+  source_root="$TEST_TMP/codex-source-${missing_member//\//-}"
+  home="$TEST_TMP/codex-source-home-${missing_member//\//-}"
+  mkdir -p "$source_root/shared" "$source_root/assets"
+  cp "$REPO_DIR/sync.sh" "$source_root/sync.sh"
+  cp -R "$REPO_DIR/codex" "$source_root/codex"
+  rm -rf "$source_root/codex/$missing_member"
+  run_command env HOME="$home" CODEX_HOME="$home/.codex" bash "$source_root/sync.sh" codex
+  assert_nonzero "Codex install refuses source missing $missing_member"
+  assert_path_absent "$home/.codex/skills/writing-goals" "missing $missing_member causes no Codex destination"
+done
+
 # A real destination is user data: default installs must never replace it.
 home="$TEST_TMP/preserve"
 mkdir -p "$home/.claude/skills/writing-goals"

@@ -85,6 +85,13 @@ assert_denied 'env chdir wrapped in-place sed is inspected'
 run_hook "$root" Bash "exec sed -i '' 's/one/two/' $outside/file" "$root"
 assert_denied 'exec wrapped in-place sed is inspected'
 
+run_hook "$root" Bash "\"rm\" -f $outside/quoted-rm" "$root"
+assert_denied 'quoted destructive executable outside the repository is denied'
+run_hook "$root" Bash "'/bin/mv' safe.txt $outside/quoted-mv" "$root"
+assert_denied 'quoted absolute destructive executable outside the repository is denied'
+run_hook "$root" Bash "/usr/bin/find $outside -delete" "$root"
+assert_denied 'absolute find mutation outside the repository is denied'
+
 run_hook "$root" Bash 'gh pr create'
 assert_denied 'gh is denied as an external mutator'
 run_hook "$root" Bash 'glab mr create'

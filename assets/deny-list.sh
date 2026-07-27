@@ -637,6 +637,42 @@ is_destructive() {
   esac
 }
 
+inspect_destructive_segment() {
+  local command_index="$1" end="$2" pos value
+  pos=$((command_index + 1))
+  while [ "$pos" -lt "$end" ]; do
+    value="$(strip_token_quotes "${TOKENS[$pos]}")"
+    case "$value" in
+      -*) : ;;
+      *) check_target "$value" ;;
+    esac
+    pos=$((pos + 1))
+  done
+}
+
+inspect_find_segment() {
+  local command_index="$1" end="$2" pos value mutates=0
+  pos=$((command_index + 1))
+  while [ "$pos" -lt "$end" ]; do
+    value="$(strip_token_quotes "${TOKENS[$pos]}")"
+    case "$value" in
+      -delete|-exec|-execdir) mutates=1 ;;
+    esac
+    pos=$((pos + 1))
+  done
+  [ "$mutates" -eq 1 ] || return 0
+
+  pos=$((command_index + 1))
+  while [ "$pos" -lt "$end" ]; do
+    value="$(strip_token_quotes "${TOKENS[$pos]}")"
+    case "$value" in
+      -*) break ;;
+      *) check_target "$value" ;;
+    esac
+    pos=$((pos + 1))
+  done
+}
+
 i=0
 while [ "$i" -lt "$NTOK" ]; do
   tok="${TOKENS[$i]}"
@@ -650,18 +686,6 @@ while [ "$i" -lt "$NTOK" ]; do
   # dd of=<path>
   elif case "$tok" in of=*) true ;; *) false ;; esac; then
     check_target "${tok#of=}"
-  # destructive command: check its path arguments until a separator
-  elif is_destructive "$tok"; then
-    j=$((i+1))
-    while [ "$j" -lt "$NTOK" ]; do
-      a="${TOKENS[$j]}"
-      is_sep "$a" && break
-      case "$a" in
-        -*) : ;;                      # skip flags
-        *) check_target "$a" ;;
-      esac
-      j=$((j+1))
-    done
   fi
   i=$((i+1))
 done
@@ -684,6 +708,14 @@ while [ "$i" -le "$NTOK" ]; do
           sed)
             inspect_sed_segment "$COMMAND_INDEX" "$i"
             ;;
+          find)
+            inspect_find_segment "$COMMAND_INDEX" "$i"
+            ;;
+          *)
+            if is_destructive "$command_token"; then
+              inspect_destructive_segment "$COMMAND_INDEX" "$i"
+            fi
+            ;;
         esac
       fi
     fi
@@ -691,25 +723,6 @@ while [ "$i" -le "$NTOK" ]; do
   fi
   i=$((i + 1))
 done
-
-# find ... -delete  /  find ... -exec <destructive> : check the search roots
-if has '(^|[[:space:];|&(/])find([[:space:]]|$)' && \
-   has '(^|[[:space:]])(-delete|-exec|-execdir)([[:space:]]|$)'; then
-  seen_find=0
-  i=0
-  while [ "$i" -lt "$NTOK" ]; do
-    tok="${TOKENS[$i]}"
-    if [ "$seen_find" -eq 1 ]; then
-      case "$tok" in
-        -*) break ;;                  # first predicate -> roots done
-        ';'|'|'|'&'|'('|')') break ;;
-        *) check_target "$tok" ;;      # a search root
-      esac
-    fi
-    [ "$tok" = "find" ] && seen_find=1
-    i=$((i+1))
-  done
-fi
 
 # ---- 8) obvious spend / purchase -------------------------------------------
 SPEND_PATTERNS=(

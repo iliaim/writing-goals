@@ -25,8 +25,6 @@ esac
 claude_dest="$HOME/.claude/skills/writing-goals"
 codex_root="${CODEX_HOME:-$HOME/.codex}"
 codex_dest="$codex_root/skills/writing-goals"
-codex_enabled=0
-
 fail() {
   echo "ERROR: $*" >&2
   return 1
@@ -119,14 +117,11 @@ preflight_claude() {
 }
 
 preflight_codex() {
-  # Codex remains optional until its adapter is present, matching the original
-  # installer behaviour.  When present, validate its source before mutation.
-  if [ ! -f "$BD/codex/SKILL.md" ]; then
-    codex_enabled=0
-    return 0
-  fi
-  codex_enabled=1
   require_dir "$BD/codex" || return 1
+  require_file "$BD/codex/SKILL.md" || return 1
+  require_file "$BD/codex/agents/openai.yaml" || return 1
+  require_dir "$BD/codex/shared" || return 1
+  require_dir "$BD/codex/assets" || return 1
   preflight_codex_destination
 }
 
@@ -158,7 +153,6 @@ install_claude() {
 }
 
 install_codex() {
-  [ "$codex_enabled" -eq 1 ] || { echo "Codex   -> adapter not built yet, skipping"; return 0; }
   if [ "$force" -eq 1 ] && { [ -e "$codex_dest" ] || [ -L "$codex_dest" ]; }; then
     rm -rf -- "$codex_dest" || fail "cannot replace Codex target: $codex_dest" || return 1
   fi
