@@ -19,7 +19,8 @@ assert_file_contains "$method" 'GATE_SURFACE' 'canonical method requires explici
 assert_file_contains "$method" 'whitespace-separated.*glob/list|glob/list.*whitespace-separated' 'canonical method documents GATE_SURFACE list semantics'
 assert_file_contains "$method" 'repository root' 'canonical method documents repository-relative surface resolution'
 assert_file_contains "$method" 'regular file' 'canonical method requires regular-file surface entries'
-assert_file_contains "$method" 'detects only changes.*after.*trusted baseline|after its trusted baseline' 'canonical method limits digest protection to a trusted baseline'
+assert_file_contains "$method" 'surface digest detects only changes' 'canonical method limits digest protection to post-baseline changes'
+assert_file_contains "$method" 'after its first trusted baseline' 'canonical method requires a trusted digest baseline'
 assert_file_contains "$method" 'prime it before maker edits|read-only.*maker|pre-record.*baseline' 'canonical method requires protected or pre-established surface baseline'
 assert_file_contains "$claude" 'shared/method.md' 'Claude adapter mandates the canonical shared method'
 assert_file_contains "$codex" 'shared/method.md' 'Codex adapter mandates the canonical shared method'
@@ -64,6 +65,9 @@ done
 assert_file_contains "$REPO_DIR/shared/gates.md" 'GATE_SURFACE' 'gate guide names mandatory GATE_SURFACE configuration'
 assert_file_contains "$REPO_DIR/shared/gates.md" 'ordinary shell word splitting.*glob expansion|shell glob/list' 'gate guide documents exact surface expansion semantics'
 assert_file_contains "$REPO_DIR/shared/gates.md" 'trusted baseline' 'gate guide warns that surface hashing needs a trusted baseline'
+assert_file_contains "$REPO_DIR/shared/gates.md" 'read-only.*before' 'gate guide requires a protected surface before maker work'
+assert_file_contains "$REPO_DIR/shared/gates.md" 'same session payload|same session-keyed state' 'gate guide limits trusted priming to the actual session key'
+assert_file_contains "$REPO_DIR/shared/gates.md" '[Mm]anual or pre-session priming is not' 'gate guide rejects unreliable out-of-session priming'
 
 assert_file_contains "$REPO_DIR/README.md" 'development install|live symlink' 'README explains live symlink development installs'
 assert_file_contains "$REPO_DIR/README.md" '--force' 'README documents default refusal and --force'
@@ -72,6 +76,9 @@ assert_file_contains "$REPO_DIR/README.md" 'GATE_CMD' 'README documents trusted 
 assert_file_contains "$REPO_DIR/README.md" 'GOAL_GATE_CAP' 'README documents explicit gate cap'
 assert_file_contains "$REPO_DIR/README.md" 'GATE_SURFACE' 'README documents mandatory gate surface'
 assert_file_contains "$REPO_DIR/README.md" 'trusted baseline' 'README explains the trusted surface baseline'
+assert_file_contains "$REPO_DIR/README.md" 'read-only.*before' 'README gives an operationally safe surface setup'
+assert_file_contains "$REPO_DIR/README.md" 'same session payload.*state key' 'README explains the session-keyed priming constraint'
+assert_file_contains "$REPO_DIR/README.md" 'manual or pre-session.*not reliable' 'README rejects unreliable priming guidance'
 assert_file_contains "$REPO_DIR/README.md" 'decision.*block' 'README documents retry hook output'
 assert_file_contains "$REPO_DIR/README.md" 'continue.*false|needs-human|needs human' 'README documents terminal gate output'
 assert_file_contains "$REPO_DIR/README.md" '\.claude/settings\.json' 'README shows Claude hook registration'
@@ -86,5 +93,7 @@ assert_file_contains "$REPO_DIR/.github/workflows/ci.yml" 'ubuntu-' 'CI runs on 
 assert_file_contains "$REPO_DIR/.github/workflows/ci.yml" 'macos-' 'CI runs on macOS'
 assert_file_contains "$REPO_DIR/.github/workflows/ci.yml" 'bash tests/run.sh' 'CI runs the portable contract suite'
 assert_file_contains "$REPO_DIR/.github/workflows/ci.yml" 'shellcheck' 'CI installs and runs ShellCheck on Ubuntu'
+assert_file_contains "$REPO_DIR/.github/workflows/ci.yml" 'actions/checkout@[0-9a-f]{40}' 'CI pins checkout to a reviewed commit'
+assert_file_contains "$REPO_DIR/.github/workflows/ci.yml" 'persist-credentials:[[:space:]]*false' 'CI does not persist checkout credentials'
 
 finish_tests

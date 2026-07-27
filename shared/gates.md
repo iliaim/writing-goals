@@ -45,11 +45,13 @@ regular file. Unmatched patterns therefore fail; filenames containing whitespace
 representable by this interface. Absolute words follow shell semantics but are outside the
 supported configuration contract.
 
-The stored surface digest detects changes only **after a trusted baseline exists**. Before maker
-edits, a trusted setup step must prime the first digest. Alternatively, make the complete
-verification surface read-only to the maker or pre-record its baseline using a trusted process.
-Never let the maker's first verification attempt silently establish the accepted baseline after
-implementation has begun.
+The stored surface digest detects changes only **after a trusted baseline exists**. The currently
+supported safe setup is to make the complete verification surface read-only to the maker before
+work starts. A trusted orchestrator may establish the first digest only if it invokes the hook
+with the exact same session payload and therefore the same session-keyed state before maker edits.
+The scripts expose no separate prime-only interface. Manual or pre-session priming is not
+reliable because it may create a different state key. Never let the maker's first post-edit hook
+invocation silently establish the accepted baseline.
 
 ## Keep verifiers tiny — run → compare → block/allow
 

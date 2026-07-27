@@ -31,7 +31,7 @@ mechanics.
 | Collision handling | Refuse by default; `--force` replaces only the selected target | Preserves user-owned skill content |
 | Verification | Trusted command Stop hook with explicit cap and surface | Gives the maker an independent, bounded checker |
 | Gate state | Session-keyed, mode-0600 state and failure log | Avoids model-facing command output and cross-session counters |
-| Surface protection | Digest from a trusted baseline plus sandbox permissions | A first untrusted digest or writable state is not protection |
+| Surface protection | Read-only-to-maker surface before work, then a session-keyed digest | A first untrusted digest or writable state is not protection |
 | Retry outcome | `decision:block` below the configured cap | Requests another bounded iteration |
 | Terminal outcome | `continue:false` with a needs-human reason | Stops invalid, corrupt, or exhausted loops |
 | Safety policy | Deny-list as defense in depth inside an OS sandbox | Shell matching cannot provide containment |
@@ -99,8 +99,9 @@ local audit workspaces are intentionally ignored and are not evidence artifacts.
 - `GATE_CMD` is trusted shell code and must never be populated from untrusted text.
 - `GATE_SURFACE` uses ordinary shell word splitting and glob expansion; whitespace in filenames
   is unsupported.
-- A surface digest is meaningful only after a trusted baseline. Sandbox permissions must protect
-  both the verification surface and gate state from the maker.
+- A surface digest is meaningful only after a trusted baseline. The supported setup makes the
+  surface read-only before maker work; ordinary manual or pre-session priming is not reliable
+  because state is session-keyed. Sandbox permissions must protect both surface and gate state.
 - Platform hook contracts can change. Update the adapter, its official source link, and contract
   tests together.
 

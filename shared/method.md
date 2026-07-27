@@ -51,9 +51,11 @@ the cap stops the loop and reports needs-human.
 
 The counter is tamper-resistant only when the sandbox prevents the worker from writing its state
 directory. An out-of-repository path alone is not protection. Gate logs and state are evidence,
-not a security boundary. The surface digest detects only changes made after its trusted baseline:
-prime it before maker edits, mount the verification surface read-only to the maker, or pre-record
-the baseline through a trusted process. See `shared/gates.md`.
+not a security boundary. The currently supported safe setup makes the complete verification
+surface read-only to the maker before work starts. The surface digest detects only changes made
+after its first trusted baseline. A trusted orchestrator can establish that baseline only by
+invoking the hook with the exact same session payload and state key before maker edits; a manual
+or pre-session run is not reliable priming. See `shared/gates.md`.
 
 ## 5. Chain only when needed
 

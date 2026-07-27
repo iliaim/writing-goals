@@ -63,9 +63,11 @@ export GATE_SURFACE='tests/*.sh'          # mandatory repo-relative shell glob/l
 untrusted input. `GATE_SURFACE` uses whitespace-separated shell words and cannot represent
 filenames containing whitespace. Every expansion must resolve to a regular file.
 
-The stored digest only detects changes after a **trusted baseline** exists. Before maker edits,
-run the hook once from a trusted setup step, pre-record the baseline through a trusted process,
-or make the verification surface read-only to the maker. Keeping gate state outside the
+The stored digest only detects changes after a **trusted baseline** exists. The currently
+supported safe setup makes the complete verification surface read-only to the maker before work
+starts. A trusted orchestrator can establish the first digest only by invoking the hook with the
+exact same session payload and state key before maker edits. The scripts have no prime-only
+interface, so a manual or pre-session run is not reliable priming. Keeping gate state outside the
 repository is not sufficient by itself; sandbox permissions must also prevent the maker from
 altering it.
 
