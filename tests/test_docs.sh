@@ -70,7 +70,21 @@ assert_file_contains "$REPO_DIR/README.md" '--force' 'README documents default r
 assert_file_contains "$REPO_DIR/README.md" 'jq' 'README documents jq prerequisite'
 assert_file_contains "$REPO_DIR/README.md" 'GATE_CMD' 'README documents trusted GATE_CMD'
 assert_file_contains "$REPO_DIR/README.md" 'GOAL_GATE_CAP' 'README documents explicit gate cap'
+assert_file_contains "$REPO_DIR/README.md" 'GATE_SURFACE' 'README documents mandatory gate surface'
+assert_file_contains "$REPO_DIR/README.md" 'trusted baseline' 'README explains the trusted surface baseline'
+assert_file_contains "$REPO_DIR/README.md" 'decision.*block' 'README documents retry hook output'
+assert_file_contains "$REPO_DIR/README.md" 'continue.*false|needs-human|needs human' 'README documents terminal gate output'
+assert_file_contains "$REPO_DIR/README.md" '\.claude/settings\.json' 'README shows Claude hook registration'
+assert_file_contains "$REPO_DIR/README.md" '\.codex/hooks\.json' 'README shows Codex hook registration'
 assert_file_contains "$REPO_DIR/README.md" 'bash tests/run.sh' 'README names the contract test command'
 assert_file_contains "$REPO_DIR/README.md" 'out of scope' 'README says an external driver is out of scope'
+assert_file_contains "$REPO_DIR/PLAN.md" 'as-built|As-built' 'PLAN is an as-built record'
+assert_file_contains "$REPO_DIR/PLAN.md" 'compatibility' 'PLAN contains a compatibility record'
+assert_not_contains "$(cat "$REPO_DIR/PLAN.md")" 'Status:.*draft|Ready for your review before build' 'PLAN does not describe the implemented system as a draft'
+
+assert_file_contains "$REPO_DIR/.github/workflows/ci.yml" 'ubuntu-' 'CI runs on Ubuntu'
+assert_file_contains "$REPO_DIR/.github/workflows/ci.yml" 'macos-' 'CI runs on macOS'
+assert_file_contains "$REPO_DIR/.github/workflows/ci.yml" 'bash tests/run.sh' 'CI runs the portable contract suite'
+assert_file_contains "$REPO_DIR/.github/workflows/ci.yml" 'shellcheck' 'CI installs and runs ShellCheck on Ubuntu'
 
 finish_tests

@@ -3,6 +3,5 @@
 *.swp
 *~
 
-# Skill runtime artifacts (created in target repos, not part of this skill)
-.goal-gate-count
-*.log
+# Local Git worktrees are disposable checkouts, not repository content.
+.worktrees/
