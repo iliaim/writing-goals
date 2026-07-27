@@ -74,11 +74,11 @@ confirm these actions into permission; a human must use a separately controlled 
 - **Weaken security** — disable auth, loosen permissions, add a backdoor, exfiltrate.
 - **Cross a trust boundary** not already inside scope.
 
-## Bypass-mode reality — the sandbox is the boundary, the hooks are a backstop
+## Unattended permission modes — the sandbox is the boundary
 
-In `--dangerously-skip-permissions` (Claude) / full-auto (Codex), the platform's approval
-prompts are **OFF**. A model promise ("I won't do X") is not a control — but neither is a
-string-matching hook. Be honest about what each layer actually buys.
+When an unattended permission mode turns interactive approvals off, a model promise ("I won't do
+X") is not a control — but neither is a string-matching lifecycle policy. Be honest about what
+each layer actually buys.
 
 **The hooks are a best-effort, defense-in-depth backstop against footguns — NOT a security
 boundary.** The `PreToolUse` deny-list and the Stop-hook gate catch a **cooperative** agent's

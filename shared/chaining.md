@@ -1,6 +1,6 @@
 # Chaining — turn a big objective into a gated chain
 
-Loaded by the method when one `/goal` can't hold the work. A chain is a **DAG of atomic
+Loaded by the method when one goal contract cannot hold the work. A chain is a **DAG of atomic
 `.goals/*.md` files** run by a **resumable ledger loop**, where every node ends at a
 machine-checkable gate a fresh checker verifies. Same spine as one goal: *the maker never
 certifies its own completion; every node is bounded; nothing unverifiable is guessed.*

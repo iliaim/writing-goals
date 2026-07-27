@@ -41,15 +41,19 @@ build, typecheck, or lint is only a proxy unless it exercises the required behav
 
 ## 4. Gate deterministically
 
-For unattended work, configure the platform Stop hook to run a trusted, non-mutating verifier.
-Set both `GATE_CMD` and `GOAL_GATE_CAP` explicitly; there is no default test command or default
-iteration budget. A failing check may request another iteration below the cap. Passing permits a
-stop. Invalid configuration, invalid state, or reaching the cap stops the loop and reports
-needs-human.
+For unattended work, configure the platform lifecycle gate to run a trusted, non-mutating
+verifier. Set `GATE_CMD`, `GOAL_GATE_CAP`, and `GATE_SURFACE` explicitly; there is no default test
+command or iteration budget. `GATE_SURFACE` is a whitespace-separated shell glob/list evaluated
+from the repository root: configure repo-relative entries, require at least one expansion, and
+ensure every expanded entry resolves to a regular file. A failing check may request another
+iteration below the cap. Passing permits a stop. Invalid configuration, invalid state, or reaching
+the cap stops the loop and reports needs-human.
 
 The counter is tamper-resistant only when the sandbox prevents the worker from writing its state
 directory. An out-of-repository path alone is not protection. Gate logs and state are evidence,
-not a security boundary. See `shared/gates.md`.
+not a security boundary. The surface digest detects only changes made after its trusted baseline:
+prime it before maker edits, mount the verification surface read-only to the maker, or pre-record
+the baseline through a trusted process. See `shared/gates.md`.
 
 ## 5. Chain only when needed
 

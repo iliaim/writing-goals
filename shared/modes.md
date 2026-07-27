@@ -5,20 +5,18 @@ advances to the next goal**. All three need the same complete `stop_rules` (succ
 iterations, cost, and wall-clock). Unattended modes also require the Class-4 deny-list and
 sandbox — the mode changes who pulls the trigger, not the method.
 
-**Key platform fact:** there is **no native goal-to-goal chaining** in Claude Code or Codex.
-The evaluator judges *one* condition; it does not fire the next goal. So any auto-advance is
-an **external wrapper**, not a built-in.
+The persisted DAG is advanced by a human or an external driver; platform completion for one node
+does not update the next node's ledger state.
 
 ## The three modes
 
-**1. Human-gated stepping (default).** The skill emits the ordered chain; the **human sets
-each `/goal`** and only moves to the next after the current one's gate clears. Natural
+**1. Human-gated stepping (default).** The skill emits the ordered chain; the human activates
+each goal through the platform invocation and moves on only after the current gate clears. Natural
 checkpoints, a person in the loop at every hop. Best default — no wrapper, no bypass mode.
 
 **2. Autonomous driver.** An **external wrapper loop** does the advancing, because nothing
 native will:
-- a script over headless `claude -p "/goal …"` (or `codex exec`), **or** a `/schedule` cloud
-  routine, that
+- a script over the platform's non-interactive entrypoint or scheduler that
 - reads the **ledger** (`.goals/` statuses) + the **gate output** for the current goal, and
 - **fires the next ready goal** (`status:todo` ∧ all `depends_on` done) when the gate passes.
 The wrapper is the chaining engine; the platform just runs one goal at a time.

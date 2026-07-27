@@ -11,6 +11,7 @@ references as the task requires; this adapter adds no policy.
 ## Invoke and trust
 
 - Invoke as `$writing-goals`, select it from `/skills`, or allow its description to trigger it.
+- Use `codex exec` as the non-interactive entrypoint for an external goal-chain driver.
 - Skill frontmatter contains only `name` and `description`; UI and invocation metadata belong in
   `agents/openai.yaml`.
 - Project hooks live in `.codex/hooks.json` or `.codex/config.toml`. Non-managed command hooks

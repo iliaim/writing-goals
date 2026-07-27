@@ -13,8 +13,8 @@ A well-formed goal =
 3. **Inherited project Definition-of-Done** — the repo's existing bar (lint/typecheck/CI green) rides
    along; the slice's own gate is *added* to it, never *instead of* it.
 4. **An evidence requirement** — **run the gate, paste the raw output + exit code.** Never paraphrase,
-   never assert "tests pass." The transcript-only evaluator judges what you *surface*; a paraphrase is
-   self-report, not proof.
+   never assert "tests pass." Persisted raw evidence lets a fresh checker reproduce the verdict;
+   a paraphrase is self-report, not proof.
 5. **Complete stop rules** — concrete **success**, **failure**, maximum **iterations**, **cost**, and
    **wall-clock** bounds. An unbounded goal is a cost risk.
 
@@ -73,5 +73,4 @@ or re-read config for the real command) first.
   proxy — don't dress it up as behavioral.
 - **Forbid** editing, skipping, xfailing, or deleting the verification surface to reach green — encode
   that in `Scope: do NOT touch`.
-- Raw output **+ exit code**, every time. Paraphrased success is the enemy the transcript evaluator
-  can't catch.
+- Raw output **+ exit code**, every time. A paraphrase cannot be independently checked.
