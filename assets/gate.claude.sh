@@ -116,6 +116,8 @@ if ! mkdir -p "$STATE_ROOT" 2>/dev/null; then
 fi
 
 TEMP_FILE=""
+# Invoked indirectly through the traps below.
+# shellcheck disable=SC2317
 cleanup_temp() {
   if [ -n "$TEMP_FILE" ]; then
     rm -f "$TEMP_FILE" 2>/dev/null || true

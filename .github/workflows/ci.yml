@@ -43,6 +43,5 @@ jobs:
       - name: Run ShellCheck
         if: runner.os == 'Linux'
         # GATE_CMD is explicitly trusted shell source; evaluating it is the
-        # documented interface rather than accidental dynamic code. Gate
-        # cleanup handlers are reached indirectly through shell traps.
-        run: shellcheck --exclude=SC2294,SC2317 sync.sh assets/*.sh
+        # documented interface rather than accidental dynamic code.
+        run: shellcheck --exclude=SC2294 sync.sh assets/*.sh
