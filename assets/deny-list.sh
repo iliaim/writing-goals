@@ -415,15 +415,8 @@ for pat in "${PKG_PATTERNS[@]}"; do
   fi
 done
 
-# ---- 5) destructive git (force-push / history rewrite) ---------------------
-# Tolerant of -C <dir>, --git-dir=..., and interleaved options after
-# normalization: we require the tokens `git` AND `push` AND a force/mirror flag
-# to co-occur, regardless of order.
+# ---- 5) git history rewrite ------------------------------------------------
 if has '(^|[[:space:];|&(/])git([[:space:]]|$)'; then
-  if has '(^|[[:space:]])push([[:space:]]|$)' && \
-     has '(--force([[:space:]]|=|$)|--force-with-lease|(^|[[:space:]])-f([[:space:]]|$)|--mirror)'; then
-    deny "destructive git push (force / force-with-lease / mirror) blocked."
-  fi
   if has 'filter-branch' || has 'filter-repo' || \
      { has '(^|[[:space:]])reflog([[:space:]]|$)' && has 'expire'; } || \
      has '(^|[[:space:]])update-ref[[:space:]]+-d'; then
@@ -451,6 +444,45 @@ fi
 # We tokenize the command, then check every redirect target and every path
 # argument of a destructive command. Any resolved target outside the repo -> DENY.
 #
+# This is deliberately a bounded parser. Quoted whitespace and commands that
+# change the effective working directory need shell semantics to tokenize or
+# resolve correctly, so recognized mutations using those shapes fail closed.
+has_quoted_whitespace() {
+  local value="$CMD" quote="" saw_space=0 pos=0 char next
+  while [ "$pos" -lt "${#value}" ]; do
+    char="${value:$pos:1}"
+    if [ "$char" = "\\" ]; then
+      pos=$((pos + 1))
+      [ "$pos" -lt "${#value}" ] || return 1
+      next="${value:$pos:1}"
+      [ "$next" != " " ] || return 0
+      pos=$((pos + 1))
+      continue
+    fi
+    if [ -n "$quote" ]; then
+      if [ "$char" = "$quote" ]; then
+        [ "$saw_space" -eq 0 ] || return 0
+        quote=""
+        saw_space=0
+      elif [ "$char" = " " ]; then
+        saw_space=1
+      fi
+    elif [ "$char" = "'" ] || [ "$char" = '"' ]; then
+      quote="$char"
+      saw_space=0
+    fi
+    pos=$((pos + 1))
+  done
+  return 1
+}
+
+if {
+  has '(^|[[:space:]])(>|>>)([[:space:]]|$)' ||
+  has '(^|[[:space:]])of=';
+} && has_quoted_whitespace; then
+  deny "quoted whitespace in a mutation target is outside the bounded parser contract — failing closed."
+fi
+
 # Pad redirect operators and separators so they become their own tokens.
 PADDED="$(printf '%s' "$CMD" | awk '{
   gsub(/>>/, "\002");            # protect >>
@@ -487,6 +519,7 @@ is_assignment_token() {
 find_command_index() {
   local pos="$1" end="$2" value base
   COMMAND_INDEX=-1
+  COMMAND_CHANGES_CWD=0
   while [ "$pos" -lt "$end" ]; do
     value="$(strip_token_quotes "${TOKENS[$pos]}")"
     if is_assignment_token "$value"; then pos=$((pos + 1)); continue; fi
@@ -498,8 +531,15 @@ find_command_index() {
           value="$(strip_token_quotes "${TOKENS[$pos]}")"
           if is_assignment_token "$value"; then pos=$((pos + 1)); continue; fi
           case "$value" in
-            -u|--unset|-C|--chdir) pos=$((pos + 2)) ;;
-            --chdir=*) pos=$((pos + 1)) ;;
+            -u|--unset) pos=$((pos + 2)) ;;
+            -C|--chdir)
+              COMMAND_CHANGES_CWD=1
+              pos=$((pos + 2))
+              ;;
+            -C?*|--chdir=*)
+              COMMAND_CHANGES_CWD=1
+              pos=$((pos + 1))
+              ;;
             -*) pos=$((pos + 1)) ;;
             *) break ;;
           esac
@@ -611,19 +651,41 @@ inspect_sed_segment() {
   done
 }
 
-is_destructive() {
-  # match on the basename so an absolute path (/bin/rm) is caught too
-  case "${1##*/}" in
-    rm|rmdir|unlink|shred|cp|mv|tee|truncate|ln|touch|mkdir) return 0 ;;
-    *) return 1 ;;
-  esac
-}
-
 inspect_destructive_segment() {
-  local command_index="$1" end="$2" pos value
+  local command_index="$1" end="$2" pos value command_base
+  command_base="$(strip_token_quotes "${TOKENS[$command_index]}")"
+  command_base="${command_base##*/}"
   pos=$((command_index + 1))
   while [ "$pos" -lt "$end" ]; do
     value="$(strip_token_quotes "${TOKENS[$pos]}")"
+    if [ "$command_base" = cp ] || [ "$command_base" = mv ] || [ "$command_base" = ln ]; then
+      case "$value" in
+        -t|--target-directory)
+          pos=$((pos + 1))
+          [ "$pos" -lt "$end" ] || deny "$command_base target-directory option has no value."
+          check_target "$(strip_token_quotes "${TOKENS[$pos]}")"
+          pos=$((pos + 1))
+          continue
+          ;;
+        --target-directory=*)
+          check_target "${value#*=}"
+          pos=$((pos + 1))
+          continue
+          ;;
+        -*t)
+          pos=$((pos + 1))
+          [ "$pos" -lt "$end" ] || deny "$command_base target-directory option has no value."
+          check_target "$(strip_token_quotes "${TOKENS[$pos]}")"
+          pos=$((pos + 1))
+          continue
+          ;;
+        -*t?*)
+          check_target "${value#*t}"
+          pos=$((pos + 1))
+          continue
+          ;;
+      esac
+    fi
     case "$value" in
       -*) : ;;
       *) check_target "$value" ;;
@@ -633,7 +695,7 @@ inspect_destructive_segment() {
 }
 
 inspect_find_segment() {
-  local command_index="$1" end="$2" pos value mutates=0
+  local command_index="$1" end="$2" pos value mutates=0 saw_path=0
   pos=$((command_index + 1))
   while [ "$pos" -lt "$end" ]; do
     value="$(strip_token_quotes "${TOKENS[$pos]}")"
@@ -651,10 +713,45 @@ inspect_find_segment() {
   while [ "$pos" -lt "$end" ]; do
     value="$(strip_token_quotes "${TOKENS[$pos]}")"
     case "$value" in
-      -*) break ;;
-      *) check_target "$value" ;;
+      --) : ;;
+      -H|-L|-P) : ;;
+      -D)
+        pos=$((pos + 1))
+        [ "$pos" -lt "$end" ] || deny "find -D option has no value."
+        ;;
+      -O*) : ;;
+      -*)
+        [ "$saw_path" -eq 1 ] && break
+        deny "unsupported leading find option ('$value') can hide a mutation root — failing closed."
+        ;;
+      *)
+        check_target "$value"
+        saw_path=1
+        ;;
     esac
     pos=$((pos + 1))
+  done
+}
+
+inspect_git_segment() {
+  local command_index="$1" end="$2" pos value
+  pos=$((command_index + 1))
+  while [ "$pos" -lt "$end" ]; do
+    value="$(strip_token_quotes "${TOKENS[$pos]}")"
+    case "$value" in
+      -C|-c|--git-dir|--work-tree|--namespace|--config-env)
+        pos=$((pos + 2))
+        ;;
+      --git-dir=*|--work-tree=*|--namespace=*|--config-env=*|-*)
+        pos=$((pos + 1))
+        ;;
+      push)
+        deny "git push mutates shared remote refs and is denied in unattended runs."
+        ;;
+      *)
+        return 0
+        ;;
+    esac
   done
 }
 
@@ -687,23 +784,32 @@ while [ "$i" -le "$NTOK" ]; do
       if [ "$COMMAND_INDEX" -ge 0 ]; then
         command_token="$(strip_token_quotes "${TOKENS[$COMMAND_INDEX]}")"
         case "${command_token##*/}" in
+          cd|pushd|popd)
+            deny "working-directory changes are outside the bounded parser contract — failing closed."
+            ;;
+          touch|mkdir|rm|rmdir|unlink|shred|cp|mv|tee|truncate|ln|sed|find)
+            if [ "$COMMAND_CHANGES_CWD" -eq 1 ]; then
+              deny "working-directory changes before a mutation are outside the bounded parser contract — failing closed."
+            fi
+            if has_quoted_whitespace; then
+              deny "quoted whitespace in a mutation target is outside the bounded parser contract — failing closed."
+            fi
+            case "${command_token##*/}" in
+              sed)  inspect_sed_segment "$COMMAND_INDEX" "$i" ;;
+              find) inspect_find_segment "$COMMAND_INDEX" "$i" ;;
+              *)    inspect_destructive_segment "$COMMAND_INDEX" "$i" ;;
+            esac
+            ;;
+          git)
+            inspect_git_segment "$COMMAND_INDEX" "$i"
+            ;;
           gh|glab)
             deny "external repository mutator (gh/glab) is denied in unattended runs."
-            ;;
-          sed)
-            inspect_sed_segment "$COMMAND_INDEX" "$i"
-            ;;
-          find)
-            inspect_find_segment "$COMMAND_INDEX" "$i"
             ;;
           xargs)
             deny "nested command execution through xargs is not safely analyzable."
             ;;
-          *)
-            if is_destructive "$command_token"; then
-              inspect_destructive_segment "$COMMAND_INDEX" "$i"
-            fi
-            ;;
+          *) : ;;
         esac
       fi
     fi

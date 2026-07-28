@@ -54,6 +54,7 @@ assert_file_contains "$REPO_DIR/shared/autonomy.md" 'Class 3' 'autonomy policy n
 assert_file_contains "$REPO_DIR/shared/autonomy.md" 'explicit.*bounded.*human|human.*bounded.*authori' 'Class 3 external or spending actions require bounded human authority'
 assert_file_contains "$REPO_DIR/shared/autonomy.md" 'Class 4' 'autonomy policy names Class 4 actions'
 assert_file_contains "$REPO_DIR/shared/autonomy.md" 'unattended' 'Class 4 policy is scoped to unattended execution'
+assert_file_contains "$REPO_DIR/shared/autonomy.md" 'any `push`' 'Class 4 policy denies every unattended git push'
 assert_file_contains "$REPO_DIR/shared/autonomy.md" 'commit.*authori|authori.*commit' 'commits require user or repository authority'
 assert_file_contains "$REPO_DIR/shared/chaining.md" 'insufficient' 'disjoint artifacts are explicitly insufficient for parallelism'
 

@@ -70,7 +70,7 @@ confirm these actions into permission; a human must use a separately controlled 
 - **External sends** — email, Slack, social post, webhook, any outbound message.
 - **Prod deploys / prod DB writes.**
 - **Secrets** — read, print, or transmit credentials / tokens / keys.
-- **Destructive git** — `push --force`, history rewrite, branch/tag deletion on shared refs.
+- **External git mutation** — any `push`, history rewrite, or branch/tag deletion on shared refs.
 - **Weaken security** — disable auth, loosen permissions, add a backdoor, exfiltrate.
 - **Cross a trust boundary** not already inside scope.
 

@@ -115,4 +115,43 @@ assert_link_target "$home/.claude/skills/writing-goals/SKILL.md" "$REPO_DIR/clau
 assert_path_absent "$home/.claude/skills/writing-goals/EXTRA" '--force claude replaces the exact Claude target'
 assert_file_contains "$home/.codex/skills/writing-goals/KEEP" '^leave me alone$' '--force claude does not replace Codex target'
 
+# Installation-time failures in `all` must roll back both clean and forced
+# destinations. Inject a deterministic failure only for the Codex link.
+real_ln="$(command -v ln)"
+shim_dir="$TEST_TMP/failing-ln"
+mkdir -p "$shim_dir"
+printf '%s\n' \
+  '#!/bin/sh' \
+  'last_arg=' \
+  'for arg do last_arg=$arg; done' \
+  'case "$last_arg" in' \
+  '  */.codex/skills/writing-goals) exit 72 ;;' \
+  'esac' \
+  'exec "$REAL_LN" "$@"' > "$shim_dir/ln"
+chmod +x "$shim_dir/ln"
+
+home="$TEST_TMP/all-runtime-rollback"
+run_command env HOME="$home" CODEX_HOME="$home/.codex" REAL_LN="$real_ln" PATH="$shim_dir:$PATH" bash "$sync" all
+assert_nonzero 'all reports a later installation-time Codex failure'
+assert_not_contains "$(cat "$RUN_OUT")" 'Claude[[:space:]]+->' 'rolled-back all emits no premature Claude success message'
+assert_path_absent "$home/.claude/skills/writing-goals" 'all rolls back a clean Claude install after a later failure'
+assert_path_absent "$home/.codex/skills/writing-goals" 'all leaves no failed clean Codex destination'
+
+home="$TEST_TMP/all-idempotent-runtime-rollback"
+run_command env HOME="$home" CODEX_HOME="$home/.codex" bash "$sync" all
+assert_success 'all establishes an installer-owned layout before rollback testing'
+run_command env HOME="$home" CODEX_HOME="$home/.codex" REAL_LN="$real_ln" PATH="$shim_dir:$PATH" bash "$sync" all
+assert_nonzero 'idempotent all reports a later installation-time Codex failure'
+assert_link_target "$home/.claude/skills/writing-goals/SKILL.md" "$REPO_DIR/claude/SKILL.md" 'idempotent rollback restores the prior Claude layout'
+assert_link_target "$home/.codex/skills/writing-goals" "$REPO_DIR/codex" 'idempotent rollback restores the prior Codex layout'
+
+home="$TEST_TMP/all-force-runtime-rollback"
+mkdir -p "$home/.claude/skills/writing-goals" "$home/.codex/skills/writing-goals"
+printf 'claude sentinel\n' > "$home/.claude/skills/writing-goals/KEEP"
+printf 'codex sentinel\n' > "$home/.codex/skills/writing-goals/KEEP"
+run_command env HOME="$home" CODEX_HOME="$home/.codex" REAL_LN="$real_ln" PATH="$shim_dir:$PATH" bash "$sync" --force all
+assert_nonzero '--force all reports a later installation-time Codex failure'
+assert_file_contains "$home/.claude/skills/writing-goals/KEEP" '^claude sentinel$' '--force all restores the original Claude destination'
+assert_file_contains "$home/.codex/skills/writing-goals/KEEP" '^codex sentinel$' '--force all restores the original Codex destination'
+
 finish_tests

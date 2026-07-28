@@ -96,6 +96,64 @@ assert_denied 'find nested destructive execution fails closed'
 run_hook "$root" Bash "printf x | xargs rm -f $outside/xargs-rm" "$root"
 assert_denied 'xargs nested destructive execution fails closed'
 
+run_hook "$root" Bash 'git push origin HEAD' "$root"
+assert_denied 'ordinary git push is denied as an unattended external mutation'
+run_hook "$root" Bash 'git push origin --delete stale-branch' "$root"
+assert_denied 'deleting git push is denied as an unattended external mutation'
+run_hook "$root" Bash 'echo git push' "$root"
+assert_allowed 'git push mentioned as ordinary text is allowed'
+
+run_hook "$root" Bash "touch \"$outside/outside file\"" "$root"
+assert_denied 'quoted touch target containing spaces cannot bypass path validation'
+run_hook "$root" Bash "cp safe.txt '$outside/outside copy'" "$root"
+assert_denied 'quoted copy target containing spaces cannot bypass path validation'
+run_hook "$root" Bash "\"touch\" \"$outside/quoted executable target\"" "$root"
+assert_denied 'quoted mutator executable cannot bypass quoted-whitespace validation'
+run_hook "$root" Bash 'echo "read only text"' "$root"
+assert_allowed 'quoted whitespace in a read-only command remains allowed'
+run_hook "$root" Bash 'touch "subdir/inside file"' "$root"
+assert_denied 'quoted whitespace in an in-repository mutation intentionally fails closed'
+run_hook "$root" Bash "touch $outside/escaped\\ file" "$root"
+assert_denied 'backslash-escaped whitespace in a mutation target fails closed'
+
+run_hook "$root" Bash "cd \"$outside\" && rm victim" "$root"
+assert_denied 'relative mutation after cd fails closed'
+run_hook "$root" Bash "env -C \"$outside\" rm victim" "$root"
+assert_denied 'relative mutation through env chdir fails closed'
+run_hook "$root" Bash "pushd \"$outside\" && touch victim" "$root"
+assert_denied 'relative mutation after directory-stack change fails closed'
+run_hook "$root" Bash "env --chdir=$outside touch victim" "$root"
+assert_denied 'relative mutation through attached env chdir fails closed'
+run_hook "$root" Bash "env -C$outside rm victim" "$root"
+assert_denied 'relative mutation through attached short env chdir fails closed'
+run_hook "$root" Bash "\"cd\" \"$outside\" && rm victim" "$root"
+assert_denied 'quoted directory-changing executable fails closed'
+
+run_hook "$root" Bash "cp --target-directory=$outside safe.txt" "$root"
+assert_denied 'attached copy target-directory outside the repository is denied'
+run_hook "$root" Bash "cp --target-directory \"$outside\" safe.txt" "$root"
+assert_denied 'separated copy target-directory outside the repository is denied'
+run_hook "$root" Bash "cp -t$outside safe.txt" "$root"
+assert_denied 'attached short copy target-directory outside the repository is denied'
+run_hook "$root" Bash "ln --target-directory=$outside safe.txt" "$root"
+assert_denied 'link target-directory outside the repository is denied'
+run_hook "$root" Bash "mv -t$outside safe.txt" "$root"
+assert_denied 'move target-directory sibling outside the repository is denied'
+run_hook "$root" Bash "cp -at$outside safe.txt" "$root"
+assert_denied 'combined copy options cannot hide an outside target-directory'
+run_hook "$root" Bash "mv -vt$outside safe.txt" "$root"
+assert_denied 'combined move options cannot hide an outside target-directory'
+run_hook "$root" Bash "ln -st$outside safe.txt" "$root"
+assert_denied 'combined link options cannot hide an outside target-directory'
+run_hook "$root" Bash "find -H \"$outside\" -depth -delete" "$root"
+assert_denied 'find leading traversal option does not hide an outside mutation root'
+run_hook "$root" Bash "find -- \"$outside\" -delete" "$root"
+assert_denied 'find end-of-options marker does not hide an outside mutation root'
+run_hook "$root" Bash "find -X \"$outside\" -delete" "$root"
+assert_denied 'unsupported macOS find option fails closed before an outside root'
+run_hook "$root" Bash "find -E \"$outside\" -delete" "$root"
+assert_denied 'alternate macOS find syntax fails closed before an outside root'
+
 run_hook "$root" Bash 'gh pr create'
 assert_denied 'gh is denied as an external mutator'
 run_hook "$root" Bash 'glab mr create'

@@ -31,7 +31,9 @@ edits in this repository immediately affect the installed skill.
 Claude is installed at `~/.claude/skills/writing-goals`; Codex at
 `${CODEX_HOME:-$HOME/.codex}/skills/writing-goals`. A normal install refuses an occupied target
 unless it is the complete canonical layout previously created from this checkout. `all`
-preflights both targets before changing either one.
+preflights both targets before changing either one and restores their prior states if a handled
+installation command fails. This is compensated rollback, not crash-safe storage: `SIGKILL`,
+power loss, and unsupported concurrent changes remain outside the installer contract.
 
 If you have inspected the exact destination and deliberately want to replace it:
 
@@ -42,7 +44,8 @@ If you have inspected the exact destination and deliberately want to replace it:
 
 `--force` removes only the selected `writing-goals` target, then recreates its links. It can
 delete user content inside that exact target, so back it up first. It does not replace parent
-skill directories.
+skill directories. For `--force all`, both originals are retained until both replacement layouts
+succeed and are restored after a handled installation failure.
 
 Invoke the installed skill as `/writing-goals` in Claude Code or `$writing-goals` (or the
 `/skills` picker) in Codex.

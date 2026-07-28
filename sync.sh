@@ -6,6 +6,7 @@ set -euo pipefail
 BD="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 force=0
+report_install=1
 if [ "${1:-}" = "--force" ]; then
   force=1
   shift
@@ -149,7 +150,8 @@ install_claude() {
   install_link "$BD/claude/SKILL.md" "$claude_dest/SKILL.md" || return 1
   install_link "$BD/shared" "$claude_dest/shared" || return 1
   install_link "$BD/assets" "$claude_dest/assets" || return 1
-  echo "Claude  -> $claude_dest  (invoke as /writing-goals)"
+  [ "$report_install" -eq 0 ] ||
+    echo "Claude  -> $claude_dest  (invoke as /writing-goals)"
 }
 
 install_codex() {
@@ -158,7 +160,96 @@ install_codex() {
   fi
   mkdir -p "$codex_root/skills" || fail "cannot create Codex skills root: $codex_root/skills" || return 1
   install_link "$BD/codex" "$codex_dest" || return 1
-  echo "Codex   -> $codex_dest  (invoke as \$writing-goals / /skills picker)"
+  [ "$report_install" -eq 0 ] ||
+    echo "Codex   -> $codex_dest  (invoke as \$writing-goals / /skills picker)"
+}
+
+# `all` is one transaction. Existing targets are moved aside in the same
+# parent directory, then restored if either installation fails. This also
+# preserves user-owned destinations when --force was explicitly requested.
+BACKUP_RESULT=""
+backup_destination() {
+  local destination="$1" backup
+  BACKUP_RESULT=""
+  if [ -e "$destination" ] || [ -L "$destination" ]; then
+    backup="${destination}.writing-goals-backup.$$"
+    if [ -e "$backup" ] || [ -L "$backup" ]; then
+      fail "transaction backup already exists: $backup" || return 1
+    fi
+    mv -- "$destination" "$backup" ||
+      { fail "cannot stage transaction backup: $destination" || return 1; }
+    BACKUP_RESULT="$backup"
+  fi
+}
+
+transaction_claude_owned() {
+  local entry name expected
+  [ -d "$claude_dest" ] && [ ! -L "$claude_dest" ] || return 1
+  for entry in "$claude_dest"/* "$claude_dest"/.[!.]* "$claude_dest"/..?*; do
+    [ -e "$entry" ] || [ -L "$entry" ] || continue
+    name="${entry##*/}"
+    case "$name" in
+      SKILL.md) expected="$BD/claude/SKILL.md" ;;
+      shared)   expected="$BD/shared" ;;
+      assets)   expected="$BD/assets" ;;
+      *) return 1 ;;
+    esac
+    link_has_target "$entry" "$expected" || return 1
+  done
+}
+
+remove_transaction_destination() {
+  local destination="$1" adapter="$2"
+  [ -e "$destination" ] || [ -L "$destination" ] || return 0
+  case "$adapter" in
+    claude) transaction_claude_owned || return 1 ;;
+    codex)  link_has_target "$codex_dest" "$BD/codex" || return 1 ;;
+    *) return 1 ;;
+  esac
+  rm -rf -- "$destination"
+}
+
+restore_destination() {
+  local destination="$1" backup="$2" adapter="$3"
+  remove_transaction_destination "$destination" "$adapter" || return 1
+  if [ -n "$backup" ]; then
+    mv -- "$backup" "$destination" || return 1
+  fi
+}
+
+rollback_all() {
+  local claude_backup="$1" codex_backup="$2" failed=0
+  restore_destination "$codex_dest" "$codex_backup" codex || failed=1
+  restore_destination "$claude_dest" "$claude_backup" claude || failed=1
+  [ "$failed" -eq 0 ]
+}
+
+install_all_transactionally() {
+  local claude_backup="" codex_backup=""
+  report_install=0
+
+  backup_destination "$claude_dest" || return 1
+  claude_backup="$BACKUP_RESULT"
+  if ! backup_destination "$codex_dest"; then
+    restore_destination "$claude_dest" "$claude_backup" claude || true
+    return 1
+  fi
+  codex_backup="$BACKUP_RESULT"
+
+  if install_claude && install_codex; then
+    [ -z "$codex_backup" ] || rm -rf -- "$codex_backup" ||
+      { fail "cannot remove Codex transaction backup: $codex_backup" || return 1; }
+    [ -z "$claude_backup" ] || rm -rf -- "$claude_backup" ||
+      { fail "cannot remove Claude transaction backup: $claude_backup" || return 1; }
+    echo "Claude  -> $claude_dest  (invoke as /writing-goals)"
+    echo "Codex   -> $codex_dest  (invoke as \$writing-goals / /skills picker)"
+    return 0
+  fi
+
+  if ! rollback_all "$claude_backup" "$codex_backup"; then
+    fail "installation failed and transaction rollback was incomplete" || return 1
+  fi
+  return 1
 }
 
 # Do every source, destination leaf, and ancestor check before the first mkdir,
@@ -176,5 +267,5 @@ esac
 case "$selection" in
   claude) install_claude ;;
   codex)  install_codex ;;
-  all)    install_claude; install_codex ;;
+  all)    install_all_transactionally ;;
 esac

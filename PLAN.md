@@ -43,7 +43,7 @@ mechanics.
 | Surface | Claude Code | Codex | Repository contract |
 |---|---|---|---|
 | Skill invocation | `/writing-goals` | `$writing-goals`, `/skills`, or description match | Adapter-specific |
-| Install target | `~/.claude/skills/writing-goals` | `${CODEX_HOME:-$HOME/.codex}/skills/writing-goals` | `sync.sh` preflights before mutation |
+| Install target | `~/.claude/skills/writing-goals` | `${CODEX_HOME:-$HOME/.codex}/skills/writing-goals` | `sync.sh all` preflights both and compensates handled failures |
 | Installed shape | Directory containing three canonical links | Symlink to the self-contained `codex/` directory | Re-running the same layout is idempotent |
 | Project hook file | `.claude/settings.json` | `.codex/hooks.json` or platform-supported config | User reviews and trusts hook source |
 | Repository root | `CLAUDE_PROJECT_DIR` | Hook input `cwd` | Missing or invalid root fails closed |
