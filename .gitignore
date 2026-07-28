@@ -5,3 +5,6 @@
 
 # Local Git worktrees are disposable checkouts, not repository content.
 .worktrees/
+
+# Local AIVV review state and generated reports are not repository content.
+.aivv/

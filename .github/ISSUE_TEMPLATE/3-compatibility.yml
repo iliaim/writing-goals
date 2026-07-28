@@ -1,0 +1,56 @@
+name: Platform compatibility
+description: Report a Claude Code or Codex contract change affecting an adapter.
+title: "[Compatibility]: "
+labels: []
+body:
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - Claude Code
+        - Codex
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Platform version
+      description: Include the exact CLI or app version and operating system.
+    validations:
+      required: true
+  - type: input
+    id: commit
+    attributes:
+      label: writing-goals commit
+      description: Full commit SHA tested.
+    validations:
+      required: true
+  - type: textarea
+    id: change
+    attributes:
+      label: Observed compatibility problem
+      description: Describe the hook, invocation, metadata, or install behavior that changed.
+    validations:
+      required: true
+  - type: input
+    id: docs
+    attributes:
+      label: Official platform documentation
+      description: Link to the authoritative source supporting the current behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Minimal reproduction and redacted output
+      render: shell
+    validations:
+      required: true
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety check
+      options:
+        - label: This report contains no secrets, exploit details, or private data.
+          required: true

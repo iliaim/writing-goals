@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/iliaim/writing-goals/security/advisories/new
+    about: Report vulnerabilities privately. Do not include sensitive details in a public issue.
+  - name: Private GitHub abuse report
+    url: https://docs.github.com/en/communities/maintaining-your-safety-on-github/reporting-abuse-or-spam
+    about: Use GitHub's Report content or Block or Report controls when abusive behavior or content requires private handling.

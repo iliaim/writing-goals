@@ -1,0 +1,46 @@
+name: Documentation accuracy
+description: Report an incorrect, unclear, stale, inaccessible, or broken public document.
+title: "[Docs]: "
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping keep platform and safety claims accurate. Do not include secrets or
+        vulnerability details here; use the private process in SECURITY.md.
+  - type: input
+    id: location
+    attributes:
+      label: Document and section
+      description: Link to the file, heading, or line where the problem appears.
+      placeholder: README.md#deterministic-gate
+    validations:
+      required: true
+  - type: textarea
+    id: current
+    attributes:
+      label: Current wording or behavior
+      description: Quote only the smallest relevant excerpt or describe the broken navigation.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected correction
+      description: Explain the accurate wording, clearer structure, or expected destination.
+    validations:
+      required: true
+  - type: input
+    id: source
+    attributes:
+      label: Authoritative source
+      description: For platform facts, provide the official documentation URL.
+    validations:
+      required: false
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety check
+      options:
+        - label: This report contains no secrets, exploit details, or private data.
+          required: true

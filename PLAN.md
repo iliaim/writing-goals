@@ -1,6 +1,6 @@
 # writing-goals — as-built record
 
-This file records the implemented design as of 2026-07-27. It is a decision and compatibility
+This file records the implemented design as of 2026-07-28. It is a decision and compatibility
 record, not a promise of future work and not a replacement for the executable contracts in
 `tests/`.
 
@@ -37,6 +37,9 @@ mechanics.
 | Safety policy | Deny-list as defense in depth inside an OS sandbox | Shell matching cannot provide containment |
 | Chaining | Persisted shallow DAG guidance only | Native cross-goal orchestration is not assumed |
 | Dependencies | Bash, `jq`, and a SHA-256 utility | Keeps the implementation portable and auditable |
+| Public documentation | Outcome-led README with focused quick-start, example, and security guides | Gives users a first result without duplicating canonical policy |
+| License | MIT, copyright 2026 iliaim | Enables broad reuse with a short, standard notice obligation |
+| Community health | Repository-specific security, support, conduct, contribution, issue, and PR policies | Makes reporting and review expectations explicit |
 
 ## Compatibility matrix
 
@@ -71,6 +74,8 @@ claude/SKILL.md ── loads canonical method + Claude mechanics
 codex/SKILL.md  ── loads canonical method + Codex mechanics
 assets/         ── gate adapters, deny-list, goal template
 tests/          ── portable installer, gate, deny-list, and documentation contracts
+docs/           ── public quick start, checked examples, and threat-model summary
+.github/        ── CI, structured issue forms, and pull-request evidence template
 ```
 
 The shared method contains no platform commands or lifecycle quirks. The adapters do not restate
@@ -87,6 +92,10 @@ platform constraints differ.
 - Expanded the deny-list's ordinary-footgun parsing while keeping it explicitly best effort.
 - Established `shared/method.md` as the policy source and reconciled both platform adapters.
 - Added operational documentation and lightweight macOS/Linux CI.
+- Reworked the public front page around outcomes, proof, first use, scope, and safety boundaries.
+- Added an MIT license and actionable security, support, conduct, contribution, issue, and pull
+  request policies.
+- Added focused public guides while keeping `shared/method.md` and its linked references canonical.
 
 Git history and tracked tests are the durable evidence for this work. Temporary task reports and
 local audit workspaces are intentionally ignored and are not evidence artifacts.

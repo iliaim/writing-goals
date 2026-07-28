@@ -1,12 +1,145 @@
 # writing-goals
 
-`writing-goals` is a small, agent-agnostic method for turning intent into bounded,
-machine-verifiable goals. The shared method covers investigation, goal authoring,
-deterministic gates, optional decomposition, and safe unattended execution. Thin adapters add
-the current Claude Code and Codex invocation and hook details.
+**Give Claude Code and Codex a finish line they can prove.**
 
-The core rule is simple: the maker does not certify its own completion. A fresh checker must be
-able to rerun an exact acceptance command and reach the same result.
+[![CI](https://github.com/iliaim/writing-goals/actions/workflows/ci.yml/badge.svg)](https://github.com/iliaim/writing-goals/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
+`writing-goals` turns open-ended agent work into bounded goal contracts with exact acceptance
+checks, independent verification, and explicit limits on retries, time, and cost. The core method
+is platform-neutral; this repository currently ships tested Claude Code and Codex adapters.
+
+The core rule is simple: **the maker does not certify its own completion.** A fresh checker must
+be able to rerun the same acceptance command and reach the same result.
+
+## Why it exists
+
+Ordinary prompts describe work, but they rarely define a trustworthy end state:
+
+| Ordinary agent task | `writing-goals` contract |
+|---|---|
+| Completion is subjective | The acceptance command is chosen before implementation |
+| The maker can announce that it is done | A fresh checker reruns the evidence |
+| Retries can stop early or continue indefinitely | Success, failure, iteration, time, and cost stops are explicit |
+| A green build may be treated as proof of behavior | Verification surfaces are ranked and weak proxies are named |
+| A hook may be mistaken for containment | Trust boundaries and OS isolation remain explicit |
+
+```mermaid
+flowchart LR
+    A["Intent"] --> B["Investigate repository"]
+    B --> C["Write bounded goal contract"]
+    C --> D["Maker implements"]
+    D --> E["Fresh checker reruns exact acceptance command"]
+    E -->|Pass| F["Complete with evidence"]
+    E -->|Fail below limits| D
+    E -->|Invalid state or limit reached| G["Needs human"]
+```
+
+In text: investigate the real repository, define one observable outcome and its check, let the
+maker implement it, then have a fresh checker rerun the exact command. A failure may trigger a
+bounded retry; invalid state or an exhausted limit stops for a human.
+
+## Worked example
+
+A vague request:
+
+> Improve the authentication tests.
+
+Becomes a bounded contract:
+
+```text
+Done when:     bash tests/auth/run.sh exits 0 and reports 12 passing scenarios
+Also green:    bash tests/run.sh exits 0
+Scope:         only edit src/auth/; do not edit, skip, or delete tests/auth/
+Verification:  paste the raw output from both commands and each exit code
+Stop:          success = both checks pass
+               failure = the auth check fails twice without progress
+               max_iterations = 4
+               max_cost = USD 5
+               max_wall_clock = 45 minutes
+```
+
+The exact paths and commands must come from the target repository. An agent must investigate
+rather than copy this example blindly. See [Examples](docs/examples.md) for complete patterns and
+anti-patterns.
+
+## Quick start
+
+The current distribution is a source checkout with a live-symlink installer:
+
+```bash
+git clone https://github.com/iliaim/writing-goals.git
+cd writing-goals
+
+./sync.sh codex
+# or
+./sync.sh claude
+```
+
+In Codex:
+
+```text
+$writing-goals Turn this migration into a bounded, verifiable goal.
+```
+
+In Claude Code:
+
+```text
+/writing-goals Turn this migration into a bounded, verifiable goal.
+```
+
+The Codex `/skills` picker and description-based invocation are also supported. Start with the
+[Quick start](docs/quickstart.md) for installation, updating, uninstalling, and a first real
+request.
+
+## When to use it
+
+Use a goal when:
+
+- work is multi-turn or will run unattended;
+- completion has an observable end state worth enforcing;
+- a migration, refactor, or feature can be split into verifiable slices; or
+- another agent or deterministic process must independently confirm the result.
+
+Skip it for:
+
+- a small one-shot edit where a goal adds more coordination than value;
+- exploratory work whose desired outcome is still unknown;
+- work with no meaningful verification surface; or
+- irreversible decisions, production changes, or external sends that lack explicit human
+  authorization.
+
+This repository is not a sandbox, scheduler, autonomous DAG runner, or substitute for product
+decisions. A process that advances a persisted goal DAG, schedules agents, manages budgets, or
+resumes a chain is an external driver and intentionally out of scope.
+
+## How it works
+
+The canonical method has six stages:
+
+1. **Triage** whether a goal is useful.
+2. **Investigate** repository guidance, implementation, tests, CI, and the working tree.
+3. **Author** one observable slice with scope, evidence, inherited checks, and complete stop rules.
+4. **Gate** unattended work with a trusted, deterministic, non-mutating checker.
+5. **Chain** only an approved larger specification into a shallow, resumable dependency graph.
+6. **Apply autonomy by blast radius**, recording reversible choices and stopping for external or
+   irreversible actions.
+
+[`shared/method.md`](shared/method.md) is the canonical policy. The README and guides summarize
+reader journeys and link to it; they do not replace it.
+
+## Platform support
+
+| Capability | Claude Code | Codex |
+|---|---|---|
+| Skill invocation | `/writing-goals` | `$writing-goals`, `/skills`, or description match |
+| Non-interactive entrypoint | `claude -p` | `codex exec` |
+| Project Stop-hook location | `.claude/settings.json` | `.codex/hooks.json` or `.codex/config.toml` |
+| Repository root supplied by | `CLAUDE_PROJECT_DIR` | Hook input `cwd` |
+| Shipped adapter | [`claude/SKILL.md`](claude/SKILL.md) | [`codex/SKILL.md`](codex/SKILL.md) |
+
+Platform hook contracts change over time. Adapter-specific claims cite current official
+documentation and are covered by repository documentation contracts.
 
 ## Requirements
 
@@ -14,12 +147,12 @@ able to rerun an exact acceptance command and reach the same result.
 - `jq` for either lifecycle gate
 - `shasum` or `sha256sum` for verification-surface hashing
 
-No language package manager is required by this repository.
+No language package manager is required.
 
 ## Development install
 
-The installer creates **live symlinks** back to this checkout. This is a development install:
-edits in this repository immediately affect the installed skill.
+The installer creates **live symlinks** back to this checkout. Edits in this repository
+immediately affect the installed skill:
 
 ```bash
 ./sync.sh claude
@@ -32,8 +165,10 @@ Claude is installed at `~/.claude/skills/writing-goals`; Codex at
 `${CODEX_HOME:-$HOME/.codex}/skills/writing-goals`. A normal install refuses an occupied target
 unless it is the complete canonical layout previously created from this checkout. `all`
 preflights both targets before changing either one and restores their prior states if a handled
-installation command fails. This is compensated rollback, not crash-safe storage: `SIGKILL`,
-power loss, and unsupported concurrent changes remain outside the installer contract.
+installation command fails.
+
+This is compensated rollback, not crash-safe storage: `SIGKILL`, power loss, and unsupported
+concurrent changes remain outside the installer contract.
 
 If you have inspected the exact destination and deliberately want to replace it:
 
@@ -47,14 +182,11 @@ delete user content inside that exact target, so back it up first. It does not r
 skill directories. For `--force all`, both originals are retained until both replacement layouts
 succeed and are restored after a handled installation failure.
 
-Invoke the installed skill as `/writing-goals` in Claude Code or `$writing-goals` (or the
-`/skills` picker) in Codex.
-
 ## Deterministic gate
 
-The gate is optional for interactive goal writing and recommended for unattended execution.
-Copy the platform script into the target repository, make it executable, and configure all
-three inputs in the environment that launches the agent:
+The gate is optional for interactive goal writing and required for unattended execution. Copy the
+platform script into the target repository, make it executable, and configure all three inputs in
+the environment that launches the agent:
 
 ```bash
 export GATE_CMD='bash tests/run.sh'       # trusted, deterministic, non-mutating
@@ -62,17 +194,17 @@ export GOAL_GATE_CAP=6                    # explicit positive base-10 integer
 export GATE_SURFACE='tests/*.sh'          # mandatory repo-relative shell glob/list
 ```
 
-`GATE_CMD` is evaluated as shell code, so it is a trusted configuration boundary, not
-untrusted input. `GATE_SURFACE` uses whitespace-separated shell words and cannot represent
-filenames containing whitespace. Every expansion must resolve to a regular file.
+`GATE_CMD` is evaluated as shell code, so it is a trusted configuration boundary, not untrusted
+input. `GATE_SURFACE` uses whitespace-separated shell words and cannot represent filenames
+containing whitespace. Every expansion must resolve to a regular file.
 
 The stored digest only detects changes after a **trusted baseline** exists. The currently
-supported safe setup makes the complete verification surface read-only to the maker before work
+supported setup makes the complete verification surface read-only to the maker before work
 starts. A trusted orchestrator can establish the first digest only by invoking the hook with the
 exact same session payload and state key before maker edits. The scripts have no prime-only
-interface, so a manual or pre-session run is not reliable priming. Keeping gate state outside the
-repository is not sufficient by itself; sandbox permissions must also prevent the maker from
-altering it.
+interface, so manual or pre-session priming is not reliable. Keeping gate state outside the
+repository is not sufficient by itself; sandbox permissions must prevent the maker from altering
+it.
 
 For Claude Code:
 
@@ -82,7 +214,7 @@ cp /path/to/writing-goals/assets/gate.claude.sh .claude/hooks/
 chmod +x .claude/hooks/gate.claude.sh
 ```
 
-Register the minimal project Stop hook in `.claude/settings.json`:
+Register the project Stop hook in `.claude/settings.json`:
 
 ```json
 {
@@ -124,40 +256,71 @@ Register it with an absolute path in `.codex/hooks.json`, then review and trust 
 }
 ```
 
-On a red check below the cap, either adapter emits `{"decision":"block",...}` and asks for
-another iteration. A green check exits cleanly with no JSON. Invalid configuration or state,
-and a red check at the cap, are terminal needs-human outcomes emitted as
-`{"continue":false,"stopReason":...}`. Failing command output is kept in a session-keyed,
+On a red check below the cap, either adapter emits `{"decision":"block",...}` and requests another
+iteration. A green check exits cleanly with no JSON. Invalid configuration or state, and a red
+check at the cap, are terminal needs-human outcomes emitted as
+`{"continue":false,"stopReason":...}`. Failing command output is stored in a session-keyed,
 mode-0600 state log rather than returned to the model.
 
-The hook and `assets/deny-list.sh` are defense in depth for cooperative-agent mistakes. They are
-not a security boundary. Use an OS sandbox, least privilege, scoped writable mounts, restricted
-egress, budgets, and a kill path for unattended work.
+Read [`shared/gates.md`](shared/gates.md) before using the lifecycle gate.
+
+## Safety boundary
+
+The Stop hook and [`assets/deny-list.sh`](assets/deny-list.sh) are defense in depth for a
+cooperative agent's mistakes. They are **not a security boundary** and do not contain a hostile
+or prompt-injected process.
+
+Unattended work requires an OS-level sandbox, least privilege, read-only mounts outside the
+workspace, restricted egress, explicit budgets, protected gate state, and a kill path. See the
+[Security model](docs/security-model.md) and [`shared/autonomy.md`](shared/autonomy.md).
+
+## Documentation
+
+- [Quick start](docs/quickstart.md) — install, invoke, update, and remove the source distribution
+- [Examples](docs/examples.md) — well-formed contracts, anti-patterns, and evidence
+- [Security model](docs/security-model.md) — threat model, boundaries, and operational controls
+- [Canonical method](shared/method.md) — the platform-neutral contract
+- [Goal authoring](shared/author-goal.md) — anatomy and templates
+- [Deterministic gates](shared/gates.md) — lifecycle verification
+- [Goal chaining](shared/chaining.md) — shallow persisted DAGs
+- [Autonomy policy](shared/autonomy.md) — action classes and unattended controls
+- [Execution modes](shared/modes.md) — human-gated and externally driven operation
+- [As-built record](PLAN.md) — architecture, compatibility, and design decisions
 
 ## Repository map
 
 | Path | Purpose |
 |---|---|
-| `shared/method.md` | Canonical platform-neutral method |
-| `shared/` | Focused investigation, authoring, gate, chaining, autonomy, and mode references |
-| `claude/SKILL.md` | Claude Code adapter |
-| `codex/SKILL.md` | Codex adapter and metadata |
-| `assets/gate.*.sh` | Deterministic Stop-hook adapters |
-| `assets/deny-list.sh` | Best-effort pre-use policy |
-| `assets/goal.md.tmpl` | Persisted sub-goal template |
-| `sync.sh` | Non-destructive live-symlink installer |
-| `PLAN.md` | As-built decisions, compatibility, and scope |
+| [`shared/method.md`](shared/method.md) | Canonical platform-neutral method |
+| [`shared/`](shared/) | Focused investigation, authoring, gate, chaining, autonomy, and mode references |
+| [`claude/SKILL.md`](claude/SKILL.md) | Claude Code adapter |
+| [`codex/SKILL.md`](codex/SKILL.md) | Codex adapter and metadata |
+| [`assets/`](assets/) | Gate adapters, pre-use policy, and goal template |
+| [`tests/`](tests/) | Portable installer, gate, policy, and documentation contracts |
+| [`sync.sh`](sync.sh) | Non-destructive live-symlink installer |
 
 ## Verify this checkout
 
-Run the portable contract suite on macOS or Linux:
+Run the same portable contract suite used by CI on macOS and Ubuntu:
 
 ```bash
 bash tests/run.sh
 ```
 
-CI runs the same suite on Ubuntu and macOS and runs ShellCheck on Ubuntu.
+CI also runs ShellCheck on Ubuntu.
 
-This repository authors goals and provides gate/policy building blocks. A process that advances
-a persisted goal DAG, schedules agents, manages budgets, or resumes a chain is an **external
-driver** and is intentionally out of scope.
+## Project policies
+
+- [Contributing](CONTRIBUTING.md)
+- [Security](SECURITY.md)
+- [Support](SUPPORT.md)
+- [Code of Conduct](CODE_OF_CONDUCT.md)
+- [Changelog](CHANGELOG.md)
+- [MIT License](LICENSE)
+
+Maintained by [iliaim](https://github.com/iliaim). Use the structured
+[issue forms](https://github.com/iliaim/writing-goals/issues/new/choose) for public documentation,
+compatibility, bug, and feature reports. Follow the [Code of Conduct](CODE_OF_CONDUCT.md) and
+GitHub's [abuse-reporting instructions](https://docs.github.com/en/communities/maintaining-your-safety-on-github/reporting-abuse-or-spam)
+for abusive GitHub content that requires private handling. Report security vulnerabilities through
+[GitHub private vulnerability reporting](https://github.com/iliaim/writing-goals/security/advisories/new).

@@ -1,0 +1,67 @@
+name: Gate or installer bug
+description: Report reproducible behavior in sync.sh, gates, deny-list, or contract tests.
+title: "[Bug]: "
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use synthetic data and redact local paths where possible. Security vulnerabilities belong
+        in GitHub private vulnerability reporting as described in SECURITY.md.
+  - type: input
+    id: commit
+    attributes:
+      label: Commit
+      description: The full commit SHA or branch and date tested.
+    validations:
+      required: true
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      options:
+        - sync.sh installer
+        - Claude gate
+        - Codex gate
+        - deny-list
+        - contract tests
+        - other
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, architecture, Bash version, jq version, and relevant platform version.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Minimal reproduction
+      description: Provide exact commands against a synthetic checkout.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected result
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual result and redacted output
+      render: shell
+    validations:
+      required: true
+  - type: checkboxes
+    id: baseline
+    attributes:
+      label: Baseline
+      options:
+        - label: I ran `bash tests/run.sh` and will include any failure that predates my reproduction.
+          required: true
+        - label: This report contains no secrets, exploit details, or private data.
+          required: true

@@ -13,5 +13,5 @@
 #     allow_implicit_invocation: false
 interface:
   display_name: "Writing Goals"
-  short_description: "Author verifiable /goal conditions + gated, bounded autonomous goal-chains."
-  default_prompt: "Use writing-goals to author a verifiable, bounded /goal (with a machine-checkable gate) for this task."
+  short_description: "Author bounded goal contracts with reproducible acceptance checks."
+  default_prompt: "Use writing-goals to turn this task into a bounded, verifiable goal contract with an exact acceptance check and complete stop rules."

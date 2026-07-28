@@ -18,7 +18,7 @@ fresh checker can reproduce the verdict instead of trusting self-report.
 
 A trusted lifecycle script runs the command in a fresh process, independent of anything the
 doer says. The checker is now code, not the maker — the true maker/checker separation.
-Recommended for every unattended permission mode.
+Required for every unattended permission mode.
 
 ## Mandatory iteration counter (bound the strongest gate)
 
