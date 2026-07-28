@@ -1,181 +1,120 @@
-# `writing-goals` — Design & Build Plan (v2, research-grounded)
+# writing-goals — as-built record
 
-> A global, agent-agnostic skill that turns intent into **rigorous, verifiable goals** for the `/goal` command in **both Claude Code and Codex**, and **decomposes + autonomously orchestrates** large objectives into a gated graph of atomic goals — principles-first, zero-assumption, safe under full-permission (bypass) runs.
+This file records the implemented design as of 2026-07-27. It is a decision and compatibility
+record, not a promise of future work and not a replacement for the executable contracts in
+`tests/`.
 
-Status: **v2 draft** — folds in 3 adversarial challengers + 7 research subagents. Ready for your review before build.
+## Intent
 
----
+The repository supplies one platform-neutral method for writing bounded, verifiable goals, plus
+small Claude Code and Codex adapters. It deliberately improves verification and resumability
+without becoming an orchestration framework.
 
-## 0. Locked decisions
-- **D1 = B** author + orchestrate. **D2 = A** conditions + real hook gates. **D3 → two platform-native files + shared neutral references** (not runtime detection). **D4 = A** practical patterns. **D5 = A** one skill family (chaining is a pulled-in module).
-- **v1 = autonomy first-class**, built on non-negotiable bounded gates + deterministic guardrails.
+The canonical flow is:
 
----
+1. triage whether a goal is useful;
+2. investigate the real repository and classify MUST-ASK versus derivable facts;
+3. author one observable slice with exact acceptance evidence and complete stop rules;
+4. add a deterministic lifecycle gate for unattended work;
+5. decompose only an approved large specification;
+6. apply autonomy according to blast radius and explicit authority.
 
-## 1. Non-negotiable principles (the spine)
-1. **Principles over templates** — the method is fixed; the goal is derived per repo/situation.
-2. **Zero assumption / zero guess** — verify every command, threshold, path, constraint against the real repo. Unverifiable → **STOP and ask**. Applies to five classes, not just "does the command exist": **surface validity** (green build ≠ feature works), **thresholds** (never invent 80%/200ms), **constraints** (ask, don't derive), **determinism** (flaky → stop/repeat-run), **scope** (monorepo → which package).
-3. **Maker–checker separation** — the checker is never the maker. Both native evaluators are weak (self-grading) → require a deterministic hook or fresh-context verifier.
-4. **Evidence-based completion** — observable state, confirmable without the doer's judgment ("second-agent test": could a fresh agent confirm from output+criteria alone?).
-5. **Always bounded** — every goal & chain has success stop + failure/iteration + cost/time cap.
-6. **Minimal footprint** — triage out trivial tasks; don't over-engineer.
+`shared/method.md` owns that policy. Platform adapters own only invocation, trust, and hook
+mechanics.
 
----
+## As-built decisions
 
-## 2. Platform facts (verified) — Claude vs Codex
-
-| | **Claude Code (v2.1.177)** | **Codex (0.144.1)** |
+| Decision | Implemented choice | Reason |
 |---|---|---|
-| Native "done" judge | Small model reads **transcript only**, no tools | **Model-declares** complete via `update_goal("complete")` — not harness-enforced |
-| ⇒ both are **weak checkers** | needs deterministic hook / fresh-context verifier | same |
-| Goal format | condition; **≤4000 chars**; add "or stop after N turns" | free-text; **≤4000 chars**; recommended 6-part / 3-element (Outcome·Constraints·Verification) |
-| Lifecycle | `/goal`, `/goal` (status), `/goal clear` (aliases stop/off/reset/none/cancel) | `/goal`, `/goal edit`, `/goal pause`, `/goal resume`, `/goal clear` |
-| Invocation of our skill | **`/writing-goals`** | **`$writing-goals`** or `/skills` picker or auto-by-description (**no typed `/name`**) |
-| Skill install dir | `~/.claude/skills/writing-goals/` | **`~/.codex/skills/writing-goals/`** = `$CODEX_HOME/skills` = root `r0`, the canonical USER root. Codex 0.144.1's `debug prompt-input` "Skill roots" table shows BOTH `r0 = ~/.codex/skills` AND `r1 = ~/.agents/skills` are **global** roots (loaded from any cwd — verified from a fresh `$TMPDIR`); we install to `r0` as canonical. ⚠️ The real reason the first per-file install failed was NOT the directory — it was that the **loader does NOT follow a symlinked `SKILL.md` file, only a symlinked skill DIR** → install by symlinking the whole self-contained `codex/` dir. |
-| SKILL.md frontmatter | `name`, `description`, opt `when_to_use`, opt `disable-model-invocation` | **`name`+`description` ONLY**; UI metadata (`interface:` block) + policy (`allow_implicit_invocation`, default true) in **`agents/openai.yaml`** (the `SkillMetadataFile`) |
-| Stop-hook config | `.claude/settings.json` → `hooks.Stop[]` | `.codex/hooks.json` → `hooks.Stop[]` (auto-discovered per layer: project `<repo>/.codex/hooks.json` overrides user `~/.codex/hooks.json`; PascalCase events; **on by default**; `matcher` optional; only `type:"command"` runs; must be **trusted** via `/hooks` or `--dangerously-bypass-hook-trust`) |
-| Stop-hook block contract | `{"decision":"block","reason":…}` / exit 2; clean exit 0 = allow | ✅ VERIFIED 0.144.1 — **SAME as Claude**: `{"decision":"block","reason":…}` on stdout + exit 0 blocks; exit 2 + stderr also blocks; clean exit 0 = allow. (⚠️ CORRECTED: earlier `{"continue":false,…}` claim was WRONG — `continue:false` *halts Codex entirely*, it does not loop.) Hook stdin gives repo root via **`cwd`** (no `CLAUDE_PROJECT_DIR`), plus `session_id`, `transcript_path`, `stop_hook_active`, `last_assistant_message`. |
-| Deterministic block confirmed? | Yes | ✅ **YES — smoke-tested 0.144.1**: Stop hook fires ≥2× and genuinely re-invokes the turn ("Stop Blocked" → agent works → "Stop Completed"). NOT notify-only. `PreToolUse` stdin is Claude-identical (`tool_name:"Bash"`, `tool_input.command`) → shared `deny-list.sh` reused verbatim; caveat: Codex PreToolUse is shell-only. |
+| Source layout | Canonical `shared/` method with thin adapters | Avoids divergent Claude/Codex policy |
+| Installation | Live symlinks from this checkout | One development source of truth |
+| Collision handling | Refuse by default; `--force` replaces only the selected target | Preserves user-owned skill content |
+| Verification | Trusted command Stop hook with explicit cap and surface | Gives the maker an independent, bounded checker |
+| Gate state | Session-keyed, mode-0600 state and failure log | Avoids model-facing command output and cross-session counters |
+| Surface protection | Read-only-to-maker surface before work, then a session-keyed digest | A first untrusted digest or writable state is not protection |
+| Retry outcome | `decision:block` below the configured cap | Requests another bounded iteration |
+| Terminal outcome | `continue:false` with a needs-human reason | Stops invalid, corrupt, or exhausted loops |
+| Safety policy | Deny-list as defense in depth inside an OS sandbox | Shell matching cannot provide containment |
+| Chaining | Persisted shallow DAG guidance only | Native cross-goal orchestration is not assumed |
+| Dependencies | Bash, `jq`, and a SHA-256 utility | Keeps the implementation portable and auditable |
 
----
+## Compatibility matrix
 
-## 3. Architecture & files
+| Surface | Claude Code | Codex | Repository contract |
+|---|---|---|---|
+| Skill invocation | `/writing-goals` | `$writing-goals`, `/skills`, or description match | Adapter-specific |
+| Install target | `~/.claude/skills/writing-goals` | `${CODEX_HOME:-$HOME/.codex}/skills/writing-goals` | `sync.sh all` preflights both and compensates handled failures |
+| Installed shape | Directory containing three canonical links | Symlink to the self-contained `codex/` directory | Re-running the same layout is idempotent |
+| Project hook file | `.claude/settings.json` | `.codex/hooks.json` or platform-supported config | User reviews and trusts hook source |
+| Repository root | `CLAUDE_PROJECT_DIR` | Hook input `cwd` | Missing or invalid root fails closed |
+| Retry signal | `{"decision":"block","reason":"..."}` | Same | Clean exit with no JSON is green |
+| Terminal signal | `{"continue":false,"stopReason":"..."}` | Same | Configuration/state/cap failures need human |
+| Pre-use matching | Platform command-hook coverage | `Bash`, `apply_patch`, MCP, and most local tools; documented exceptions | `deny-list.sh` handles its supported shell input |
+| Platform bound | Default eight consecutive no-progress Stop blocks | No repository-assumed implicit bound | Set explicit `GOAL_GATE_CAP`; keep Claude limits compatible |
 
-Source of truth = this build folder; **symlink** into both trees (symlinking across trees already works on this machine).
+The adapters cite the current official platform documentation for facts that can change. The
+portable contract suite verifies repository behavior; it does not claim compatibility with every
+past or future platform release.
 
-```
-writing-goals/
-  shared/                      # platform-NEUTRAL (principles, method, patterns) — referenced on demand
-    principles.md              # zero-assumption, DERIVE-vs-MUST-ASK, maker-checker, second-agent test
-    investigate.md             # repo discovery checklist (surfaces, exact cmds, determinism, scope, constraints)
-    author-goal.md             # well-formed goal = slice + pre-written gate + inherited DoD + evidence + autonomy tag; anti-gaming
-    gates.md                   # gate concepts + iteration-counter + safety(PreToolUse deny-list) — platform specifics cross-linked
-    chaining.md                # decomposition, DAG, .goals/ schema, ledger run-loop, reflection/replan, escalation
-    autonomy.md                # 5-class action model, decide-and-log ledger, tier-3 stop, tier-4 deny-list
-    modes.md                   # the 3 execution modes + when to use each
-  claude/SKILL.md              # Claude frontmatter + Claude specifics (transcript evaluator, settings.json Stop hook, /writing-goals)
-  codex/
-    SKILL.md                   # name+description only; Codex specifics (decision:block hook, $-invocation)
-    agents/openai.yaml         # Codex metadata + invocation policy
-    shared -> ../shared        # self-contained skill dir (so the whole dir can be symlinked)
-    assets -> ../assets
-  assets/
-    gate.claude.sh             # one concrete runnable gate (decision:block + persisted counter + stop_hook_active guard)
-    gate.codex.sh              # concrete Codex gate (decision:block via stdin cwd + counter)
-    deny-list.sh               # PreToolUse safety hook (both) — tier-4 hard blocks
-    goal.md.tmpl               # atomic .goals/ file template
-  sync.sh                      # installs (symlinks) claude/SKILL.md+shared+assets→~/.claude; whole codex/ dir→~/.codex/skills
-  PLAN.md
-```
+## Delivered architecture
 
-**Design rule:** `shared/` is 100% platform-neutral; anything platform-specific lives only in the two `SKILL.md`s (+ `openai.yaml`). Keeps both thin. SKILL.md body ≤ ~400 lines / <500 words core; frontmatter ≤1024 chars (safe on both; Claude hard cap is 1536).
+```text
+shared/method.md
+  ├── investigate.md
+  ├── author-goal.md
+  ├── gates.md
+  ├── chaining.md
+  ├── autonomy.md
+  └── modes.md
 
----
-
-## 4. The method (what the skill makes the agent do)
-
-```
-0. TRIAGE — does this even need a goal? Trivial/one-shot → "just do X", exit. (avoid over-engineering)
-1. INVESTIGATE (zero-assumption): verification surfaces + EXACT commands (read package.json/Makefile/CI/
-   pyproject/Cargo/go — confirm PRESENCE by reading, not by running side-effectful cmds); determinism?;
-   monorepo scope?; constraints. Anything unverifiable/human-only → MUST-ASK.
-2. CLASSIFY facts: DERIVE-then-CONFIRM (commands, paths) vs MUST-ASK (thresholds, constraints, definition-of-done).
-3. AUTHOR the goal = vertical slice + pre-written acceptance gate (strongest the task allows) + inherited
-   project DoD + evidence requirement (raw cmd + exit code pasted) + autonomy/risk tag. Anti-gaming: forbid
-   editing the verification surface; never accept paraphrased success; name transcript-fabrication as the enemy.
-4. RENDER platform-native (Claude condition ≤4000 | Codex free-text/6-part).
-5. GATE — offer the deterministic hook (recommended for unattended). Bound it (counter).
-6. VERIFY the draft with the second-agent test (mechanical checklist: exact cmd? specific pass-string/exit/number? a bound?).
-   For chains, a fresh-context verifier re-checks each goal before close.
+claude/SKILL.md ── loads canonical method + Claude mechanics
+codex/SKILL.md  ── loads canonical method + Codex mechanics
+assets/         ── gate adapters, deny-list, goal template
+tests/          ── portable installer, gate, deny-list, and documentation contracts
 ```
 
----
+The shared method contains no platform commands or lifecycle quirks. The adapters do not restate
+the method. Gate implementations remain separate because their repository-root inputs and
+platform constraints differ.
 
-## 5. Decomposition & orchestration (big objectives)
+## Audit remediation history
 
-**Decompose** from a real spec (no spec → get one first; never invent features). Stop-splitting rule = **"is this leaf machine-verifiable?"** (not "is it small?"). Shallow-stable, capped depth. **Walking-skeleton first** (Goal 1 = thinnest end-to-end runnable), then **vertical slices**, **one feature per goal**.
+- Added a dependency-free Bash contract harness covering installer, gates, deny-list, and docs.
+- Made installation preflighted, idempotent only for the canonical layout, and non-destructive by
+  default.
+- Made gate configuration explicit; bounded and validated counter state; protected state writes;
+  persisted failure output; and failed closed on configuration, state, hashing, and surface errors.
+- Expanded the deny-list's ordinary-footgun parsing while keeping it explicitly best effort.
+- Established `shared/method.md` as the policy source and reconciled both platform adapters.
+- Added operational documentation and lightweight macOS/Linux CI.
 
-**Atomic goal files** `.goals/*.md` (generated into the target repo), validated against spec-kit/task-master/CrewAI/LangGraph:
-```yaml
----
-id: auth-session-store            # stable node key (required)
-title: Persist sessions in Redis  # (required)
-status: todo                      # todo|in_progress|blocked|in_review|done|cancelled (required — drives run-loop & resume)
-depends_on: [redis-provision]     # DAG edges, cycle-checked (required)
-acceptance:                       # verifiable gate — done only when all pass (required)
-  - "test_session_roundtrip green"
-parallelizable: true              # (recommended)
-owner: backend-agent              # (recommended)
-priority: high                    # (recommended)
-artifacts: [src/session/*.ts]     # files this goal writes → orchestrator PROVES two parallel goals don't collide (recommended)
-risk: medium                      # low|medium|high → autonomy tier (optional)
-updated: 2026-07-23               # (optional)
----
-# body: goal statement · context · how-to
+Git history and tracked tests are the durable evidence for this work. Temporary task reports and
+local audit workspaces are intentionally ignored and are not evidence artifacts.
+
+## Boundaries and residual risk
+
+- An external driver for scheduling, resuming, or advancing a goal graph is out of scope.
+- The hooks do not contain a hostile or prompt-injected process. OS isolation and restricted
+  credentials remain mandatory for unattended execution.
+- `GATE_CMD` is trusted shell code and must never be populated from untrusted text.
+- `GATE_SURFACE` uses ordinary shell word splitting and glob expansion; whitespace in filenames
+  is unsupported.
+- A surface digest is meaningful only after a trusted baseline. The supported setup makes the
+  surface read-only before maker work; ordinary manual or pre-session priming is not reliable
+  because state is session-keyed. Sandbox permissions must protect both surface and gate state.
+- Platform hook contracts can change. Update the adapter, its official source link, and contract
+  tests together.
+
+## Verification and change policy
+
+The acceptance command is:
+
+```bash
+bash tests/run.sh
 ```
-Recursion = **filesystem** (a sub-goal is its own file), not nested arrays. **Immutable `_objective.md`** stored separately from the mutable plan; every replanned sub-goal must **trace back to the objective** (anti-drift).
 
-**Run-loop (ledger-driven, resumable):** pick ready (`status:todo` ∧ all `depends_on` done) → execute → **fresh-context verify** → mark → recompute frontier. Restart = re-read ledger. **Parallelize only low-write-coupling** branches (disjoint `artifacts`) in **isolated worktrees, single-writer, cap 3–5**; interdependent work stays single-threaded.
-
-**Between goals:** reflect + replan from **real repo state**; **fix-before-feature** (regressions first); **entry re-verify** the previous goal's gate (never trust the ledger's "done").
-
-**Bounded escalation ramp (guaranteed termination):** retry → replan → single-owner fallback → human; hard iteration + cost + time caps; **de-dup identical actions** (no-progress → escalate, not re-retry).
-
----
-
-## 6. Three execution modes
-1. **Human-gated stepping** — skill emits the ordered chain; you set each `/goal`, next after it clears. Default; natural checkpoints.
-2. **Autonomous driver** — an **external wrapper** (there is no native goal-to-goal chaining) over headless `claude -p "/goal …"` (or `/schedule` cloud routine) / `codex exec`; reads the ledger + gate output and fires the next goal.
-3. **Full-auto** — as #2 but decides judgment calls itself from best practices under the autonomy policy (§7).
-
----
-
-## 7. Autonomy policy (reconciles "act autonomously" with "never guess") — critical under bypass mode
-
-Runs happen in **bypass/full-permission mode** (Claude `--dangerously-skip-permissions`, Codex full-auto) — that *enables* unattended autonomy but **turns the platform's approval prompts OFF**, so safety must be **deterministic**, not model-promised.
-
-**5-class action model (worst dimension wins; confidence NEVER upgrades a class):**
-| Class | Trigger | Decision |
-|---|---|---|
-| 0 read/inert | no state change | AUTO |
-| 1 reversible + repo-local | undoable, in-workspace, ~free | AUTO (+log if it resolved ambiguity) |
-| 2 reversible but wide | big blast radius / effortful undo | AUTO + checkpoint |
-| 3 irreversible / external / costs money / crosses trust boundary | prod, sends, payments, delete-outside-repo, changing the top objective | **CONFIRM ALWAYS** |
-| 4 prohibited | deny-list | **DENY** (hard block) |
-
-**Decide-and-log (replaces silent guessing):** on a fork, if Class ≤2 → pick best-practice default, **record `{fork, options, chosen, rationale, undo-path, confidence}` in the goal's `assumptions`**, keep reversible, **surface at next checkpoint**. A decision that is recorded + reversible + surfaced is accountable autonomy; drop any one → it's a silent guess (forbidden).
-
-**Deterministic enforcement (works even in bypass):** a **`PreToolUse` deny-list hook** blocks tier-4 shell actions (delete outside repo, `push --force`, external sends, spend/purchase) — **deny-first precedence beats the allowlist and bypass mode.** Pair with **workspace/dir scoping**. Caveat: Codex `PreToolUse` intercepts **shell only** (not Edit/Write) → scoping covers file dangers. Plus session **cost budget + iteration cap + kill-switch**; recursive to subagents.
-
----
-
-## 8. Build process (TDD via superpowers:writing-skills — Iron Law: no skill without a failing test first)
-- **RED:** baseline a subagent **without** the skill under **3+ stacked pressures** (time + sunk-cost + authority + exhaustion); capture exact rationalizations (esp. "just assume the test command", "green build = done", "I'll invent a threshold").
-- **GREEN:** minimal skill addressing those specific failures.
-- **REFACTOR:** each new loophole → rationalization-table row + red-flag + description symptom; add "letter vs spirit" principle early; use Authority/Commitment/Social-proof levers. Clone `test-driven-development/SKILL.md` skeleton (the reference discipline skill).
-
----
-
-## 9. Acceptance criteria (dogfooded — the skill must pass a goal-grade check)
-Tested via fresh subagents on **≥4 repos** (Node w/ tests · Python lib · **no-test** repo · **non-code** docs/research goal):
-- [ ] Correct platform-native goal for each; **no-test & ambiguous-threshold repos STOP and ask** (never invent).
-- [ ] Every goal has success + failure + iteration/cost cap; passes the **fresh-context second-agent test**.
-- [ ] Gate scripts **actually gate** on a fixture (pass→allow, fail→block, malformed→caught) — Claude **and** Codex both via `decision:block` (verified: Codex uses the SAME contract, not `continue:false`).
-- [ ] The **PreToolUse deny-list** blocks a tier-4 action even in bypass mode.
-- [ ] Skill **triggers** on goal-writing intent and **does not misfire** on adjacent tasks.
-- [ ] Chaining: an objective → valid DAG of `.goals/*.md`, ledger-driven run-loop is **resumable**, parallel goals proven non-colliding via `artifacts`, every sub-goal traces to `_objective.md`.
-- [ ] Installs + triggers in **both** (Claude `/writing-goals`; Codex `$writing-goals`/picker); frontmatter valid; body within token target.
-
----
-
-## 10. Build-time verifications — RESULTS (dogfooded 2026-07-23, codex-cli 0.144.1)
-1. **Codex Stop-hook blocking on 0.144.1** — ✅ **VERIFIED BLOCKS.** Live smoke-test: a `.codex/hooks.json` Stop hook emitting `{"decision":"block","reason":…}`+exit0 fired twice (fire-count probe) and Codex logged "Stop Blocked" → agent did one step → "Stop Completed". NOT notify-only. Contract = Claude's `decision:block` (the prior `continue:false` claim was wrong; `continue:false` halts entirely). `gate.codex.sh` uses this + reads repo root from stdin `cwd`; fixture-tested pass→allow / fail→block / cap→allow with the counter out-of-repo.
-2. **Codex skills roots** — ✅ **RESOLVED via `codex debug prompt-input`** (its "Skill roots" table is authoritative). ⚠️ CORRECTED after independent re-verification: **both `r0 = ~/.codex/skills` AND `r1 = ~/.agents/skills` are GLOBAL roots** in 0.144.1 — loaded from any cwd (verified from a fresh `$TMPDIR` with no `.agents` ancestor and no config override). The earlier "`~/.agents/skills` is only repo-scoped" claim was WRONG (my own green-fixture data already showed a real file in `~/.agents/skills` loading from a project dir — I mis-attributed it). We install to `r0` (`~/.codex/skills`) as the canonical `$CODEX_HOME/skills` root; installing to `r1` would also have been discovered. The dir choice was never the bug — the symlinked-SKILL.md-file was (see #3).
-3. **Symlink-follow at load** — ✅ **VERIFIED + IMPORTANT GOTCHA.** Codex's loader does **NOT** follow a symlinked `SKILL.md` *file* (skill silently fails to load) but **DOES** follow a symlinked skill *directory* with a real SKILL.md inside. Fix: `codex/` is a self-contained dir (SKILL.md + agents/openai.yaml real; `shared`→`../shared`, `assets`→`../assets`) and sync.sh symlinks the whole dir. GREEN-checked: a fresh Codex agent loaded the skill and authored a second-agent-test-passing goal (exact cmd `npm test`/`npm run lint` + exit-0 criterion + 2-fail/5-iter bound + anti-gaming + scope).
-
----
-
-## 11. Future / extensibility (captured, not built now)
-- **Platform-adapter model.** `shared/` is the platform-neutral core; each platform is a thin adapter dir (`claude/`, `codex/`, later `hermes/`, others). **Adding a platform is additive** — new adapter + reuse `shared/`, zero core rework. Order: **Claude now → Codex next → Hermes → others.**
-- **Open-source distribution (later stage).** Keep this build folder **repo-ready & portable**: no hardcoded absolute paths in `shared/` or adapters (machine-specifics live only in `sync.sh`/install). Future: public GitHub repo (README, LICENSE, CONTRIBUTING, semver, tests/CI) distributed as **plugin / CLI / MCP with one-click install**. Before publishing, research popular analogous repos (Claude/Codex skill + plugin ecosystems, MCP servers) for packaging + contribution conventions. Explicitly deferred.
-```
+CI runs it on Ubuntu and macOS. Ubuntu additionally installs and runs ShellCheck over the
+installer and production hook scripts; SC2294 is excluded because evaluating the explicitly
+trusted `GATE_CMD` is the documented interface. Changes to a public environment variable, hook
+JSON contract, install target, goal schema, or trust model require corresponding tests and an
+update to this record.

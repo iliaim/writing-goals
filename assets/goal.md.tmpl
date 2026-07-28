@@ -6,8 +6,14 @@ status: todo                   # todo | in_progress | blocked | in_review | done
 depends_on: []                 # [ids] this goal waits on; empty = ready at start. DAG edges — must stay acyclic.
 acceptance:                    # the machine-checkable gate. Done ONLY when every item passes, verified fresh-context.
   - "<exact check + pass signal>"   # e.g. "pytest tests/test_session.py::roundtrip → PASS, exit 0"
+stop_rules:                    # every persisted sub-goal carries its own complete, concrete bounds
+  success: "<all acceptance checks pass with fresh raw evidence>"
+  failure: "<same check fails N times, no progress, blocked, or needs human>"
+  max_iterations: <positive integer>
+  max_cost: "<currency or token budget>"
+  max_wall_clock: "<duration>"
 # ── recommended ───────────────────────────────────────────────────────────
-parallelizable: false          # true only if artifacts[] is disjoint from any concurrent goal (single-writer rule)
+parallelizable: false          # disjoint artifacts are necessary, not sufficient; prove independence + review capacity
 owner: <agent-or-role>         # who executes, e.g. backend-agent
 priority: medium               # low | medium | high — ordering hint within the ready frontier
 artifacts: []                  # [glob/paths] this goal WRITES; proves parallel goals don't collide. Keep accurate.

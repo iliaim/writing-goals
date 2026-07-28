@@ -1,72 +1,163 @@
 # writing-goals
 
-A global, agent-agnostic skill that turns intent into **rigorous, verifiable goals** for the `/goal` command — and decomposes large objectives into a **gated, resumable chain** of atomic goals that can run autonomously and safely.
+`writing-goals` is a small, agent-agnostic method for turning intent into bounded,
+machine-verifiable goals. The shared method covers investigation, goal authoring,
+deterministic gates, optional decomposition, and safe unattended execution. Thin adapters add
+the current Claude Code and Codex invocation and hook details.
 
-Built for **Claude Code** today; **Codex** and other agents are additive adapters over a shared, platform-neutral core.
+The core rule is simple: the maker does not certify its own completion. A fresh checker must be
+able to rerun an exact acceptance command and reach the same result.
 
-## Core principle
+## Requirements
 
-> A `/goal` is only as trustworthy as **a stop condition a fresh checker can verify without believing the doer.**
+- Bash 3.2 or newer for the installer, gates, and contract tests
+- `jq` for either lifecycle gate
+- `shasum` or `sha256sum` for verification-surface hashing
 
-The maker never certifies its own completion; every goal ends at observable evidence, inside hard bounds; and anything that can't be verified is never guessed.
+No language package manager is required by this repository.
 
-## Install
+## Development install
+
+The installer creates **live symlinks** back to this checkout. This is a development install:
+edits in this repository immediately affect the installed skill.
 
 ```bash
-./sync.sh claude    # symlinks the skill into ~/.claude/skills/writing-goals
-# then, in a fresh Claude Code session:  /writing-goals
-
-./sync.sh codex     # symlinks the skill into ~/.codex/skills/writing-goals
-# then, in Codex:  $writing-goals  (or the /skills picker, or auto-by-description)
+./sync.sh claude
+./sync.sh codex
+# or preflight and install both:
+./sync.sh all
 ```
 
-`sync.sh` symlinks (single source of truth = this folder), so edits here propagate live. Note: Codex's loader does **not** follow a symlinked `SKILL.md` *file*, only a symlinked skill *directory* — so the Codex adapter is installed by symlinking the whole self-contained `codex/` dir into `~/.codex/skills/` (the canonical `$CODEX_HOME/skills` user root, discovered from any project).
+Claude is installed at `~/.claude/skills/writing-goals`; Codex at
+`${CODEX_HOME:-$HOME/.codex}/skills/writing-goals`. A normal install refuses an occupied target
+unless it is the complete canonical layout previously created from this checkout. `all`
+preflights both targets before changing either one and restores their prior states if a handled
+installation command fails. This is compensated rollback, not crash-safe storage: `SIGKILL`,
+power loss, and unsupported concurrent changes remain outside the installer contract.
 
-## Enable the deterministic gate (optional, for unattended runs)
+If you have inspected the exact destination and deliberately want to replace it:
 
-The Stop-hook gate is **not** wired automatically — set it up when you want a code-side checker (the maker ≠ checker separation) for an unattended run:
+```bash
+./sync.sh --force claude
+./sync.sh --force codex
+```
 
-1. Copy `assets/gate.claude.sh` into your repo's `.claude/hooks/`.
-2. `chmod +x .claude/hooks/gate.claude.sh`.
-3. Add a `Stop` hook pointing at it in `.claude/settings.json` (the `matcher` is ignored for `Stop`):
+`--force` removes only the selected `writing-goals` target, then recreates its links. It can
+delete user content inside that exact target, so back it up first. It does not replace parent
+skill directories. For `--force all`, both originals are retained until both replacement layouts
+succeed and are restored after a handled installation failure.
 
-   ```json
-   { "hooks": { "Stop": [ { "hooks": [ { "type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/gate.claude.sh" } ] } ] } }
-   ```
+Invoke the installed skill as `/writing-goals` in Claude Code or `$writing-goals` (or the
+`/skills` picker) in Codex.
 
-For **Codex**, use `assets/gate.codex.sh` instead and wire it in `.codex/hooks.json` (PascalCase events, on by default, must be trusted via `/hooks` or `--dangerously-bypass-hook-trust`):
+## Deterministic gate
+
+The gate is optional for interactive goal writing and recommended for unattended execution.
+Copy the platform script into the target repository, make it executable, and configure all
+three inputs in the environment that launches the agent:
+
+```bash
+export GATE_CMD='bash tests/run.sh'       # trusted, deterministic, non-mutating
+export GOAL_GATE_CAP=6                    # explicit positive base-10 integer
+export GATE_SURFACE='tests/*.sh'          # mandatory repo-relative shell glob/list
+```
+
+`GATE_CMD` is evaluated as shell code, so it is a trusted configuration boundary, not
+untrusted input. `GATE_SURFACE` uses whitespace-separated shell words and cannot represent
+filenames containing whitespace. Every expansion must resolve to a regular file.
+
+The stored digest only detects changes after a **trusted baseline** exists. The currently
+supported safe setup makes the complete verification surface read-only to the maker before work
+starts. A trusted orchestrator can establish the first digest only by invoking the hook with the
+exact same session payload and state key before maker edits. The scripts have no prime-only
+interface, so a manual or pre-session run is not reliable priming. Keeping gate state outside the
+repository is not sufficient by itself; sandbox permissions must also prevent the maker from
+altering it.
+
+For Claude Code:
+
+```bash
+mkdir -p .claude/hooks
+cp /path/to/writing-goals/assets/gate.claude.sh .claude/hooks/
+chmod +x .claude/hooks/gate.claude.sh
+```
+
+Register the minimal project Stop hook in `.claude/settings.json`:
 
 ```json
-{ "hooks": { "Stop": [ { "hooks": [ { "type": "command", "command": "/abs/path/to/gate.codex.sh" } ] } ] } }
+{
+  "hooks": {
+    "Stop": [{
+      "hooks": [{
+        "type": "command",
+        "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/gate.claude.sh"
+      }]
+    }]
+  }
+}
 ```
 
-Verified on codex-cli 0.144.1: the `Stop` hook genuinely blocks (re-invokes the turn) via `{"decision":"block","reason":"…"}` on stdout — the same contract as Claude; the gate reads the repo root from the hook's stdin `cwd` field.
+Claude normally overrides a Stop hook after eight consecutive blocks without progress, so keep
+`GOAL_GATE_CAP <= 8` unless `CLAUDE_CODE_STOP_HOOK_BLOCK_CAP` is deliberately raised to at least
+the same value.
 
-Wiring details, the out-of-repo iteration counter, and the `PreToolUse` deny-list pairing live in `shared/gates.md`. **Caveat for bypass-mode autonomy:** run the whole agent inside an **OS-level sandbox** — the deny-list + gate are best-effort backstops, not the security boundary.
+For Codex:
 
-## What's inside
+```bash
+mkdir -p .codex/hooks
+cp /path/to/writing-goals/assets/gate.codex.sh .codex/hooks/
+chmod +x .codex/hooks/gate.codex.sh
+```
+
+Register it with an absolute path in `.codex/hooks.json`, then review and trust the hook:
+
+```json
+{
+  "hooks": {
+    "Stop": [{
+      "hooks": [{
+        "type": "command",
+        "command": "/absolute/path/to/repo/.codex/hooks/gate.codex.sh"
+      }]
+    }]
+  }
+}
+```
+
+On a red check below the cap, either adapter emits `{"decision":"block",...}` and asks for
+another iteration. A green check exits cleanly with no JSON. Invalid configuration or state,
+and a red check at the cap, are terminal needs-human outcomes emitted as
+`{"continue":false,"stopReason":...}`. Failing command output is kept in a session-keyed,
+mode-0600 state log rather than returned to the model.
+
+The hook and `assets/deny-list.sh` are defense in depth for cooperative-agent mistakes. They are
+not a security boundary. Use an OS sandbox, least privilege, scoped writable mounts, restricted
+egress, budgets, and a kill path for unattended work.
+
+## Repository map
 
 | Path | Purpose |
 |---|---|
-| `claude/SKILL.md` | Claude adapter — navigator + discipline core |
-| `codex/SKILL.md` | Codex adapter (`name`+`description` frontmatter only) + `agents/openai.yaml` (UI metadata) + `shared`/`assets` symlinks (self-contained skill dir) |
-| `shared/` | platform-neutral references: `investigate`, `author-goal`, `gates`, `chaining`, `autonomy`, `modes` |
-| `assets/` | `gate.claude.sh` / `gate.codex.sh` (Stop-hook + iteration counter), `deny-list.sh` (PreToolUse tier-4 safety, shared by both), `goal.md.tmpl` |
-| `sync.sh` | symlink installer (Claude / Codex) |
-| `PLAN.md` | full design + research provenance |
+| `shared/method.md` | Canonical platform-neutral method |
+| `shared/` | Focused investigation, authoring, gate, chaining, autonomy, and mode references |
+| `claude/SKILL.md` | Claude Code adapter |
+| `codex/SKILL.md` | Codex adapter and metadata |
+| `assets/gate.*.sh` | Deterministic Stop-hook adapters |
+| `assets/deny-list.sh` | Best-effort pre-use policy |
+| `assets/goal.md.tmpl` | Persisted sub-goal template |
+| `sync.sh` | Non-destructive live-symlink installer |
+| `PLAN.md` | As-built decisions, compatibility, and scope |
 
-## What it does
+## Verify this checkout
 
-- **Authors one verifiable goal** — investigate the repo (zero-assumption), classify each fact as *must-ask* vs *derive-then-confirm*, then produce a goal = one slice + a pre-written gate + inherited Definition-of-Done + an evidence requirement + three bounds (success / failure / hard cap).
-- **Decomposes a big objective** into atomic `.goals/*.md` files with a dependency DAG, a resumable ledger run-loop, and safe parallelism (disjoint artifacts, single-writer, isolated worktrees).
-- **Runs autonomously and safely** — a 5-class action model, decide-and-log for reversible choices, and a `PreToolUse` deny-list as a best-effort backstop against footguns. **The real boundary for unattended / bypass-mode runs is an OS-level sandbox** (container/VM, read-only mounts outside the repo, non-root, egress via an allowlisting proxy); the deny-list + gate are extra layers inside it, not a substitute — string-matching can't contain an adversarial agent. See `shared/autonomy.md`.
+Run the portable contract suite on macOS or Linux:
 
-## Status
+```bash
+bash tests/run.sh
+```
 
-- **Claude adapter:** complete, validated (RED → GREEN → REFACTOR).
-- **Codex adapter:** complete, dogfooded on codex-cli 0.144.1 (`~/.codex/skills/`; `name`+`description` frontmatter only + `agents/openai.yaml`). Stop-hook blocking, the `decision:block` contract, `PreToolUse` shape, and skills-dir discovery were all verified by live smoke-test — not assumed.
-- **Distribution (plugin / CLI / MCP), Hermes + other adapters:** later, additive.
+CI runs the same suite on Ubuntu and macOS and runs ShellCheck on Ubuntu.
 
-## How it was built
-
-Test-driven, following the `superpowers:writing-skills` method: baseline pressure scenarios *without* the skill (to find real failure modes), then a minimal skill addressing them, then adversarial refactor probes until it held under maximum pressure. See `PLAN.md`.
+This repository authors goals and provides gate/policy building blocks. A process that advances
+a persisted goal DAG, schedules agents, manages budgets, or resumes a chain is an **external
+driver** and is intentionally out of scope.

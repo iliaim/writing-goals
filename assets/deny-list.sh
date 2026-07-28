@@ -83,11 +83,23 @@ if ! printf '%s' "$INPUT" | jq -e . >/dev/null 2>&1; then
 fi
 TOOL="$(printf '%s' "$INPUT" | jq -r '.tool_name // ""')"
 CMD_RAW="$(printf '%s' "$INPUT" | jq -r '.tool_input.command // ""')"
+PAYLOAD_CWD="$(printf '%s' "$INPUT" | jq -r '.cwd // ""')"
 
-# Only shell tools are in scope. Anything else -> allow (exit 0, no output).
+# Only shell tools and Codex apply_patch are in scope. Anything else -> allow.
 case "$TOOL" in
-  Bash|bash|shell|Shell) : ;;
+  Bash|bash|shell|Shell|apply_patch) : ;;
   *) exit 0 ;;
+esac
+
+# The bounded shell parser below is intentionally single-line. Failing closed
+# is safer than erasing command boundaries or pretending to understand quoted
+# newlines. Multiline apply_patch programs are validated separately.
+case "$TOOL" in
+  Bash|bash|shell|Shell)
+    case "$CMD_RAW" in
+      *$'\n'*|*$'\r'*) deny "multiline shell commands are outside the bounded parser contract — failing closed." ;;
+    esac
+    ;;
 esac
 
 # ---- 1) normalize: join backslash-newline, newlines/tabs -> spaces ----------
@@ -130,41 +142,81 @@ dev_write_ok() {
 }
 
 # ---- path helpers (used by the write/delete target check) ------------------
-REPO_ROOT="${CLAUDE_PROJECT_DIR:-$PWD}"
-REPO_PHYS="$(cd -P "$REPO_ROOT" 2>/dev/null && pwd -P)" || REPO_PHYS="$REPO_ROOT"
-
-# lexically collapse '.' and '..' in an absolute path (no filesystem access)
-collapse() {
-  local IFS=/ part
-  local -a out
-  local n=0
-  for part in $1; do
-    case "$part" in
-      ''|.) : ;;
-      ..) [ "$n" -gt 0 ] && { n=$((n-1)); unset "out[$n]"; } ;;
-      *) out[$n]="$part"; n=$((n+1)) ;;
-    esac
-  done
-  local res="" i=0
-  while [ "$i" -lt "$n" ]; do res="$res/${out[$i]}"; i=$((i+1)); done
-  [ -z "$res" ] && res="/"
-  printf '%s' "$res"
-}
-
-# resolve symlinks of the deepest EXISTING ancestor, then re-append the tail.
-# Handles targets that don't exist yet (writes) while still following symlinks.
-resolve_phys() {
-  local p="$1" existing="$1" rest="" phys
-  while [ ! -e "$existing" ] && [ "$existing" != "/" ] && [ -n "$existing" ]; do
-    rest="/$(basename "$existing")$rest"
-    existing="$(dirname "$existing")"
-  done
-  if [ -d "$existing" ]; then
-    phys="$(cd -P "$existing" 2>/dev/null && pwd -P)" || { printf '%s' "$p"; return 0; }
-    printf '%s%s' "$phys" "$rest"
-  else
-    printf '%s' "$p"
+REPO_ROOT=""
+for root_candidate in "$PAYLOAD_CWD" "${CLAUDE_PROJECT_DIR:-}" "${PWD:-}"; do
+  if [ -n "$root_candidate" ] && [ -d "$root_candidate" ]; then
+    REPO_ROOT="$root_candidate"
+    break
   fi
+done
+if [ -n "$REPO_ROOT" ]; then
+  REPO_PHYS="$(cd -P "$REPO_ROOT" 2>/dev/null && pwd -P)" || REPO_PHYS=""
+else
+  REPO_PHYS=""
+fi
+
+# Resolve each existing component without relying on GNU-only `readlink -f`.
+# Dangling links are rejected; nonexistent ordinary tails remain valid writes.
+resolve_phys() {
+  local p pending part rest resolved="" candidate target depth=0
+  p="$1"
+  pending="${p#/}"
+
+  while [ -n "$pending" ]; do
+    case "$pending" in
+      */*) part="${pending%%/*}"; rest="${pending#*/}" ;;
+      *) part="$pending"; rest="" ;;
+    esac
+    case "$part" in
+      ''|.)
+        pending="$rest"
+        continue
+        ;;
+      ..)
+        resolved="$(dirname "${resolved:-/}")"
+        pending="$rest"
+        continue
+        ;;
+    esac
+    if [ -z "$resolved" ] || [ "$resolved" = "/" ]; then
+      candidate="/$part"
+    else
+      candidate="$resolved/$part"
+    fi
+
+    if [ -L "$candidate" ]; then
+      depth=$((depth + 1))
+      [ "$depth" -le 40 ] || return 1
+      target="$(readlink "$candidate" 2>/dev/null)" || return 1
+      case "$target" in
+        /*)
+          [ -e "$target" ] || [ -L "$target" ] || return 1
+          pending="${target#/}"
+          resolved=""
+          ;;
+        *)
+          target="${resolved:-/}/$target"
+          [ -e "$target" ] || [ -L "$target" ] || return 1
+          pending="$target"
+          resolved=""
+          ;;
+      esac
+      [ -n "$rest" ] && pending="$pending/$rest"
+      continue
+    fi
+
+    if [ -e "$candidate" ]; then
+      [ -z "$rest" ] || [ -d "$candidate" ] || return 1
+      resolved="$candidate"
+      pending="$rest"
+      continue
+    fi
+
+    resolved="$candidate"
+    pending="$rest"
+  done
+
+  printf '%s' "${resolved:-/}"
 }
 
 is_inside() {
@@ -177,6 +229,9 @@ is_inside() {
 # Resolve one candidate write/delete target and DENY if it escapes the repo.
 check_target() {
   local t="$1"
+  if [ -z "$REPO_PHYS" ]; then
+    deny "no valid repository root is available; cannot prove the mutation stays in-repo — failing closed."
+  fi
   # strip one layer of surrounding quotes
   case "$t" in
     \"*\") t="${t#\"}"; t="${t%\"}" ;;
@@ -187,7 +242,7 @@ check_target() {
   # expand a leading ~
   case "$t" in
     "~") t="$HOMEDIR" ;;
-    "~/"*) t="$HOMEDIR/${t#\~/}" ;;
+    \~/*) t="$HOMEDIR/${t#\~/}" ;;
   esac
   # expand ${HOME} and $HOME anywhere
   t="$(printf '%s' "$t" | sed -e "s#\${HOME}#${HOMEDIR}#g" -e "s#\$HOME#${HOMEDIR}#g")"
@@ -209,12 +264,103 @@ check_target() {
     /*) : ;;
     *) t="$REPO_PHYS/$t" ;;
   esac
-  t="$(collapse "$t")"
-  t="$(resolve_phys "$t")"
+  if ! t="$(resolve_phys "$t")"; then
+    deny "write/delete target crosses a dangling, cyclic, or non-traversable path ('$t') — failing closed."
+  fi
   if ! is_inside "$t"; then
     deny "write/delete target resolves OUTSIDE the repo root ('$t' not under '$REPO_PHYS')."
   fi
 }
+
+# Codex supplies the complete apply_patch program in tool_input.command. Treat
+# its framing and operation headers as a small language rather than guessing
+# from paths that happen to occur in the payload.
+if [ "$TOOL" = "apply_patch" ]; then
+  [ -n "$REPO_PHYS" ] || deny "no valid repository root is available; cannot validate apply_patch targets."
+
+  patch_line_no=0
+  patch_operations=0
+  patch_ended=0
+  patch_current_operation=""
+  while IFS= read -r patch_line || [ -n "$patch_line" ]; do
+    patch_line_no=$((patch_line_no + 1))
+
+    if [ "$patch_line_no" -eq 1 ]; then
+      [ "$patch_line" = "*** Begin Patch" ] || deny "apply_patch payload is missing the exact Begin Patch boundary."
+      continue
+    fi
+    [ "$patch_ended" -eq 0 ] || deny "apply_patch payload contains content after End Patch."
+
+    case "$patch_line" in
+      '*** End Patch')
+        patch_ended=1
+        patch_current_operation=""
+        ;;
+      '*** Add File: '*)
+        patch_target="${patch_line#*** Add File: }"
+        [ -n "$patch_target" ] || deny "apply_patch Add File operation has no target."
+        check_target "$patch_target"
+        patch_operations=$((patch_operations + 1))
+        patch_current_operation="Add"
+        ;;
+      '*** Update File: '*)
+        patch_target="${patch_line#*** Update File: }"
+        [ -n "$patch_target" ] || deny "apply_patch Update File operation has no target."
+        check_target "$patch_target"
+        patch_operations=$((patch_operations + 1))
+        patch_current_operation="Update"
+        ;;
+      '*** Delete File: '*)
+        patch_target="${patch_line#*** Delete File: }"
+        [ -n "$patch_target" ] || deny "apply_patch Delete File operation has no target."
+        check_target "$patch_target"
+        patch_operations=$((patch_operations + 1))
+        patch_current_operation="Delete"
+        ;;
+      '*** Move to: '*)
+        patch_target="${patch_line#*** Move to: }"
+        [ "$patch_current_operation" = "Update" ] || deny "apply_patch Move to must belong to an Update File operation."
+        [ -n "$patch_target" ] || deny "apply_patch Move to operation has no destination."
+        check_target "$patch_target"
+        ;;
+      '--- '*|'+++ '*)
+        deny "legacy diff headers are not a supported apply_patch operation."
+        ;;
+      '*** Begin Patch'|'*** Add File:'|'*** Update File:'|'*** Delete File:'|'*** Move to:')
+        deny "apply_patch contains a malformed boundary or operation header."
+        ;;
+      '*** Add '*|'*** Update '*|'*** Delete '*|'*** Move '*|'*** Begin '*|'*** End '*)
+        deny "apply_patch contains a malformed boundary or operation header."
+        ;;
+      '*** '*' File: '*)
+        deny "apply_patch contains an unrecognized operation header."
+        ;;
+      '*** Rename:'*|'*** Rename File:'*|'*** Copy:'*|'*** Copy File:'*|'*** Create File:'*|'*** Remove File:'*)
+        deny "apply_patch contains an unrecognized operation header."
+        ;;
+      *)
+        # Hunk content is intentionally opaque. In particular, a legitimate
+        # content line may itself begin with "*** ".
+        ;;
+    esac
+  done <<< "$CMD_RAW"
+
+  [ "$patch_ended" -eq 1 ] || deny "apply_patch payload is missing the exact End Patch boundary."
+  [ "$patch_operations" -gt 0 ] || deny "apply_patch payload contains no recognized file operation."
+  exit 0
+fi
+
+# A supported mutation needs a trustworthy root even if its particular parser
+# below would otherwise find no path argument.
+if [ -z "$REPO_PHYS" ] && {
+  has '(^|[[:space:];|&(/])(touch|mkdir|rm|rmdir|unlink|shred|cp|mv|tee|truncate|ln)([[:space:]]|$)' ||
+  has '(^|[[:space:];|&(/])sed[[:space:]]+-[^[:space:]]*i[^[:space:]]*([[:space:]]|$)' ||
+  has '(^|[[:space:]])(>|>>)([[:space:]]|$)' ||
+  has '(^|[[:space:]])of=' ||
+  { has '(^|[[:space:];|&(/])find([[:space:]]|$)' && has '(^|[[:space:]])(-delete|-exec|-execdir)([[:space:]]|$)'; }
+}; then
+  deny "no valid repository root is available; cannot prove the mutation stays in-repo — failing closed."
+fi
 
 # ===========================================================================
 # DENY CHECKS — deny-first order. The FIRST match wins.
@@ -269,15 +415,8 @@ for pat in "${PKG_PATTERNS[@]}"; do
   fi
 done
 
-# ---- 5) destructive git (force-push / history rewrite) ---------------------
-# Tolerant of -C <dir>, --git-dir=..., and interleaved options after
-# normalization: we require the tokens `git` AND `push` AND a force/mirror flag
-# to co-occur, regardless of order.
+# ---- 5) git history rewrite ------------------------------------------------
 if has '(^|[[:space:];|&(/])git([[:space:]]|$)'; then
-  if has '(^|[[:space:]])push([[:space:]]|$)' && \
-     has '(--force([[:space:]]|=|$)|--force-with-lease|(^|[[:space:]])-f([[:space:]]|$)|--mirror)'; then
-    deny "destructive git push (force / force-with-lease / mirror) blocked."
-  fi
   if has 'filter-branch' || has 'filter-repo' || \
      { has '(^|[[:space:]])reflog([[:space:]]|$)' && has 'expire'; } || \
      has '(^|[[:space:]])update-ref[[:space:]]+-d'; then
@@ -305,6 +444,45 @@ fi
 # We tokenize the command, then check every redirect target and every path
 # argument of a destructive command. Any resolved target outside the repo -> DENY.
 #
+# This is deliberately a bounded parser. Quoted whitespace and commands that
+# change the effective working directory need shell semantics to tokenize or
+# resolve correctly, so recognized mutations using those shapes fail closed.
+has_quoted_whitespace() {
+  local value="$CMD" quote="" saw_space=0 pos=0 char next
+  while [ "$pos" -lt "${#value}" ]; do
+    char="${value:$pos:1}"
+    if [ "$char" = "\\" ]; then
+      pos=$((pos + 1))
+      [ "$pos" -lt "${#value}" ] || return 1
+      next="${value:$pos:1}"
+      [ "$next" != " " ] || return 0
+      pos=$((pos + 1))
+      continue
+    fi
+    if [ -n "$quote" ]; then
+      if [ "$char" = "$quote" ]; then
+        [ "$saw_space" -eq 0 ] || return 0
+        quote=""
+        saw_space=0
+      elif [ "$char" = " " ]; then
+        saw_space=1
+      fi
+    elif [ "$char" = "'" ] || [ "$char" = '"' ]; then
+      quote="$char"
+      saw_space=0
+    fi
+    pos=$((pos + 1))
+  done
+  return 1
+}
+
+if {
+  has '(^|[[:space:]])(>|>>)([[:space:]]|$)' ||
+  has '(^|[[:space:]])of=';
+} && has_quoted_whitespace; then
+  deny "quoted whitespace in a mutation target is outside the bounded parser contract — failing closed."
+fi
+
 # Pad redirect operators and separators so they become their own tokens.
 PADDED="$(printf '%s' "$CMD" | awk '{
   gsub(/>>/, "\002");            # protect >>
@@ -321,12 +499,260 @@ read -ra TOKENS <<< "$PADDED"
 NTOK=${#TOKENS[@]}
 
 is_sep() { case "$1" in ';'|'|'|'&'|'('|')') return 0 ;; *) return 1 ;; esac; }
-is_destructive() {
-  # match on the basename so an absolute path (/bin/rm) is caught too
-  case "${1##*/}" in
-    rm|rmdir|unlink|shred|cp|mv|tee|truncate|ln) return 0 ;;
-    *) return 1 ;;
+strip_token_quotes() {
+  local value="$1"
+  case "$value" in
+    \"*\") value="${value#\"}"; value="${value%\"}" ;;
+    \'*\') value="${value#\'}"; value="${value%\'}" ;;
   esac
+  printf '%s' "$value"
+}
+
+is_assignment_token() {
+  local value="$1" name
+  case "$value" in *=*) name="${value%%=*}" ;; *) return 1 ;; esac
+  printf '%s' "$name" | grep -Eq '^[A-Za-z_][A-Za-z0-9_]*$'
+}
+
+# Locate the executable in one ordinary command segment. Only common
+# transparent wrappers are understood; this deliberately is not a shell parser.
+find_command_index() {
+  local pos="$1" end="$2" value base
+  COMMAND_INDEX=-1
+  COMMAND_CHANGES_CWD=0
+  while [ "$pos" -lt "$end" ]; do
+    value="$(strip_token_quotes "${TOKENS[$pos]}")"
+    if is_assignment_token "$value"; then pos=$((pos + 1)); continue; fi
+    base="${value##*/}"
+    case "$base" in
+      env)
+        pos=$((pos + 1))
+        while [ "$pos" -lt "$end" ]; do
+          value="$(strip_token_quotes "${TOKENS[$pos]}")"
+          if is_assignment_token "$value"; then pos=$((pos + 1)); continue; fi
+          case "$value" in
+            -u|--unset) pos=$((pos + 2)) ;;
+            -C|--chdir)
+              COMMAND_CHANGES_CWD=1
+              pos=$((pos + 2))
+              ;;
+            -C?*|--chdir=*)
+              COMMAND_CHANGES_CWD=1
+              pos=$((pos + 1))
+              ;;
+            -*) pos=$((pos + 1)) ;;
+            *) break ;;
+          esac
+        done
+        ;;
+      command|builtin|nohup)
+        pos=$((pos + 1))
+        while [ "$pos" -lt "$end" ]; do
+          value="$(strip_token_quotes "${TOKENS[$pos]}")"
+          case "$value" in -*) pos=$((pos + 1)) ;; *) break ;; esac
+        done
+        ;;
+      exec)
+        pos=$((pos + 1))
+        while [ "$pos" -lt "$end" ]; do
+          value="$(strip_token_quotes "${TOKENS[$pos]}")"
+          case "$value" in
+            -a) pos=$((pos + 2)) ;;
+            -*) pos=$((pos + 1)) ;;
+            *) break ;;
+          esac
+        done
+        ;;
+      sudo)
+        pos=$((pos + 1))
+        while [ "$pos" -lt "$end" ]; do
+          value="$(strip_token_quotes "${TOKENS[$pos]}")"
+          case "$value" in
+            -u|-g|-h|-p|-C|-T) pos=$((pos + 2)) ;;
+            -*) pos=$((pos + 1)) ;;
+            *) break ;;
+          esac
+        done
+        ;;
+      *)
+        COMMAND_INDEX="$pos"
+        return 0
+        ;;
+    esac
+  done
+}
+
+inspect_sed_segment() {
+  local command_index="$1" end="$2" pos value
+  local in_place=0 explicit_program=0 options=1
+  pos=$((command_index + 1))
+
+  while [ "$pos" -lt "$end" ] && [ "$options" -eq 1 ]; do
+    value="$(strip_token_quotes "${TOKENS[$pos]}")"
+    case "$value" in
+      --)
+        options=0
+        pos=$((pos + 1))
+        ;;
+      -e|--expression)
+        explicit_program=1
+        pos=$((pos + 2))
+        ;;
+      -e?*|--expression=*)
+        explicit_program=1
+        pos=$((pos + 1))
+        ;;
+      -f|--file)
+        explicit_program=1
+        pos=$((pos + 2))
+        ;;
+      -f?*|--file=*)
+        explicit_program=1
+        pos=$((pos + 1))
+        ;;
+      -l|--line-length)
+        pos=$((pos + 2))
+        ;;
+      --line-length=*)
+        pos=$((pos + 1))
+        ;;
+      -i|--in-place)
+        in_place=1
+        pos=$((pos + 1))
+        if [ "$pos" -lt "$end" ]; then
+          value="${TOKENS[$pos]}"
+          case "$value" in "''"|'""'|.*) pos=$((pos + 1)) ;; esac
+        fi
+        ;;
+      --in-place=*|-i?*|-[A-Za-z]*i*)
+        in_place=1
+        pos=$((pos + 1))
+        if [ "$pos" -lt "$end" ]; then
+          value="${TOKENS[$pos]}"
+          case "$value" in "''"|'""') pos=$((pos + 1)) ;; esac
+        fi
+        ;;
+      -*) pos=$((pos + 1)) ;;
+      *) options=0 ;;
+    esac
+  done
+
+  [ "$in_place" -eq 1 ] || return 0
+  [ -n "$REPO_PHYS" ] || deny "no valid repository root is available; cannot validate in-place sed targets."
+
+  # Without -e/-f, the first non-option operand is the edit program.
+  if [ "$explicit_program" -eq 0 ] && [ "$pos" -lt "$end" ]; then
+    pos=$((pos + 1))
+  fi
+  while [ "$pos" -lt "$end" ]; do
+    value="$(strip_token_quotes "${TOKENS[$pos]}")"
+    [ "$value" = "--" ] || check_target "$value"
+    pos=$((pos + 1))
+  done
+}
+
+inspect_destructive_segment() {
+  local command_index="$1" end="$2" pos value command_base
+  command_base="$(strip_token_quotes "${TOKENS[$command_index]}")"
+  command_base="${command_base##*/}"
+  pos=$((command_index + 1))
+  while [ "$pos" -lt "$end" ]; do
+    value="$(strip_token_quotes "${TOKENS[$pos]}")"
+    if [ "$command_base" = cp ] || [ "$command_base" = mv ] || [ "$command_base" = ln ]; then
+      case "$value" in
+        -t|--target-directory)
+          pos=$((pos + 1))
+          [ "$pos" -lt "$end" ] || deny "$command_base target-directory option has no value."
+          check_target "$(strip_token_quotes "${TOKENS[$pos]}")"
+          pos=$((pos + 1))
+          continue
+          ;;
+        --target-directory=*)
+          check_target "${value#*=}"
+          pos=$((pos + 1))
+          continue
+          ;;
+        -*t)
+          pos=$((pos + 1))
+          [ "$pos" -lt "$end" ] || deny "$command_base target-directory option has no value."
+          check_target "$(strip_token_quotes "${TOKENS[$pos]}")"
+          pos=$((pos + 1))
+          continue
+          ;;
+        -*t?*)
+          check_target "${value#*t}"
+          pos=$((pos + 1))
+          continue
+          ;;
+      esac
+    fi
+    case "$value" in
+      -*) : ;;
+      *) check_target "$value" ;;
+    esac
+    pos=$((pos + 1))
+  done
+}
+
+inspect_find_segment() {
+  local command_index="$1" end="$2" pos value mutates=0 saw_path=0
+  pos=$((command_index + 1))
+  while [ "$pos" -lt "$end" ]; do
+    value="$(strip_token_quotes "${TOKENS[$pos]}")"
+    case "$value" in
+      -exec|-execdir|-ok|-okdir)
+        deny "nested command execution through find is not safely analyzable."
+        ;;
+      -delete) mutates=1 ;;
+    esac
+    pos=$((pos + 1))
+  done
+  [ "$mutates" -eq 1 ] || return 0
+
+  pos=$((command_index + 1))
+  while [ "$pos" -lt "$end" ]; do
+    value="$(strip_token_quotes "${TOKENS[$pos]}")"
+    case "$value" in
+      --) : ;;
+      -H|-L|-P) : ;;
+      -D)
+        pos=$((pos + 1))
+        [ "$pos" -lt "$end" ] || deny "find -D option has no value."
+        ;;
+      -O*) : ;;
+      -*)
+        [ "$saw_path" -eq 1 ] && break
+        deny "unsupported leading find option ('$value') can hide a mutation root — failing closed."
+        ;;
+      *)
+        check_target "$value"
+        saw_path=1
+        ;;
+    esac
+    pos=$((pos + 1))
+  done
+}
+
+inspect_git_segment() {
+  local command_index="$1" end="$2" pos value
+  pos=$((command_index + 1))
+  while [ "$pos" -lt "$end" ]; do
+    value="$(strip_token_quotes "${TOKENS[$pos]}")"
+    case "$value" in
+      -C|-c|--git-dir|--work-tree|--namespace|--config-env)
+        pos=$((pos + 2))
+        ;;
+      --git-dir=*|--work-tree=*|--namespace=*|--config-env=*|-*)
+        pos=$((pos + 1))
+        ;;
+      push)
+        deny "git push mutates shared remote refs and is denied in unattended runs."
+        ;;
+      *)
+        return 0
+        ;;
+    esac
+  done
 }
 
 i=0
@@ -342,40 +768,55 @@ while [ "$i" -lt "$NTOK" ]; do
   # dd of=<path>
   elif case "$tok" in of=*) true ;; *) false ;; esac; then
     check_target "${tok#of=}"
-  # destructive command: check its path arguments until a separator
-  elif is_destructive "$tok"; then
-    j=$((i+1))
-    while [ "$j" -lt "$NTOK" ]; do
-      a="${TOKENS[$j]}"
-      is_sep "$a" && break
-      case "$a" in
-        -*) : ;;                      # skip flags
-        *) check_target "$a" ;;
-      esac
-      j=$((j+1))
-    done
   fi
   i=$((i+1))
 done
 
-# find ... -delete  /  find ... -exec <destructive> : check the search roots
-if has '(^|[[:space:];|&(/])find([[:space:]]|$)' && \
-   has '(^|[[:space:]])(-delete|-exec|-execdir)([[:space:]]|$)'; then
-  seen_find=0
-  i=0
-  while [ "$i" -lt "$NTOK" ]; do
-    tok="${TOKENS[$i]}"
-    if [ "$seen_find" -eq 1 ]; then
-      case "$tok" in
-        -*) break ;;                  # first predicate -> roots done
-        ';'|'|'|'&'|'('|')') break ;;
-        *) check_target "$tok" ;;      # a search root
-      esac
+# Inspect the executable in every ordinary command segment. This keeps gh/glab
+# matching out of argument positions and ensures a later in-place sed is not
+# skipped after an earlier read-only command.
+segment_start=0
+i=0
+while [ "$i" -le "$NTOK" ]; do
+  if [ "$i" -eq "$NTOK" ] || is_sep "${TOKENS[$i]}"; then
+    if [ "$segment_start" -lt "$i" ]; then
+      find_command_index "$segment_start" "$i"
+      if [ "$COMMAND_INDEX" -ge 0 ]; then
+        command_token="$(strip_token_quotes "${TOKENS[$COMMAND_INDEX]}")"
+        case "${command_token##*/}" in
+          cd|pushd|popd)
+            deny "working-directory changes are outside the bounded parser contract — failing closed."
+            ;;
+          touch|mkdir|rm|rmdir|unlink|shred|cp|mv|tee|truncate|ln|sed|find)
+            if [ "$COMMAND_CHANGES_CWD" -eq 1 ]; then
+              deny "working-directory changes before a mutation are outside the bounded parser contract — failing closed."
+            fi
+            if has_quoted_whitespace; then
+              deny "quoted whitespace in a mutation target is outside the bounded parser contract — failing closed."
+            fi
+            case "${command_token##*/}" in
+              sed)  inspect_sed_segment "$COMMAND_INDEX" "$i" ;;
+              find) inspect_find_segment "$COMMAND_INDEX" "$i" ;;
+              *)    inspect_destructive_segment "$COMMAND_INDEX" "$i" ;;
+            esac
+            ;;
+          git)
+            inspect_git_segment "$COMMAND_INDEX" "$i"
+            ;;
+          gh|glab)
+            deny "external repository mutator (gh/glab) is denied in unattended runs."
+            ;;
+          xargs)
+            deny "nested command execution through xargs is not safely analyzable."
+            ;;
+          *) : ;;
+        esac
+      fi
     fi
-    [ "$tok" = "find" ] && seen_find=1
-    i=$((i+1))
-  done
-fi
+    segment_start=$((i + 1))
+  fi
+  i=$((i + 1))
+done
 
 # ---- 8) obvious spend / purchase -------------------------------------------
 SPEND_PATTERNS=(

@@ -1,6 +1,6 @@
 # Chaining — turn a big objective into a gated chain
 
-Loaded by the method when one `/goal` can't hold the work. A chain is a **DAG of atomic
+Loaded by the method when one goal contract cannot hold the work. A chain is a **DAG of atomic
 `.goals/*.md` files** run by a **resumable ledger loop**, where every node ends at a
 machine-checkable gate a fresh checker verifies. Same spine as one goal: *the maker never
 certifies its own completion; every node is bounded; nothing unverifiable is guessed.*
@@ -33,8 +33,9 @@ Split until every leaf has an `acceptance[]` a fresh agent could confirm from ou
 - **Walking-skeleton first.** Goal 1 = the thinnest **end-to-end runnable** slice (it builds,
   starts, and passes one trivial real check) — never a horizontal layer (all the models, or
   all the CSS) that runs nothing.
-- Then **vertical slices**, **one feature per goal**. Each goal ends with a commit + a short
-  progress note (what shipped, gate output, decisions).
+- Then **vertical slices**, **one feature per goal**. Each goal ends with a short progress note
+  (what shipped, gate output, decisions) and, only when user or repository policy authorizes it,
+  a commit.
 
 ## 3. `.goals/` layout — objective separate from plan
 
@@ -85,6 +86,7 @@ Class-3 human checkpoint (§7), never an unattended rewrite to make the plan "fi
 | `status` | required | `todo` \| `in_progress` \| `blocked` \| `in_review` \| `done` \| `cancelled` — drives the run-loop & resume |
 | `depends_on[]` | required | ids this waits on; DAG edges (cycle-checked) |
 | `acceptance[]` | required | the verifiable gate; done only when **all** pass |
+| `stop_rules` | required | concrete success, failure, max iterations, max cost, and max wall-clock for this node |
 | `parallelizable` | recommended | may run concurrently with disjoint-artifact siblings |
 | `owner` | recommended | which agent/role executes |
 | `priority` | recommended | ordering hint within the ready frontier |
@@ -98,9 +100,10 @@ Template: `assets/goal.md.tmpl`.
 
 - Edges come from **`depends_on`**; the plan is a **DAG, cycle-checked** before any run (a
   cycle = malformed plan → stop).
-- **Parallelize ONLY disjoint-`artifacts` branches.** Two goals may run at once **iff** their
-  `artifacts[]` sets don't intersect — the **single-writer rule** (no file has two concurrent
-  writers). Interdependent / shared-write work stays **single-threaded**.
+- Disjoint `artifacts[]` are **necessary but insufficient** for parallelism. Branches must also
+  have no semantic or runtime dependency, have enough independent review capacity, and declare
+  an integration order. The **single-writer rule** still applies: no file has two concurrent
+  writers. Interdependent or shared-write work stays single-threaded.
 - Parallel branches run in **isolated git worktrees**, **cap 3–5** concurrent. Merge each
   branch back and re-verify before continuing.
 

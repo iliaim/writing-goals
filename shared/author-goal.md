@@ -13,10 +13,10 @@ A well-formed goal =
 3. **Inherited project Definition-of-Done** — the repo's existing bar (lint/typecheck/CI green) rides
    along; the slice's own gate is *added* to it, never *instead of* it.
 4. **An evidence requirement** — **run the gate, paste the raw output + exit code.** Never paraphrase,
-   never assert "tests pass." The transcript-only evaluator judges what you *surface*; a paraphrase is
-   self-report, not proof.
-5. **Three bounds** — **success** (evidence-based end state) · **failure** (same check fails N× / blocked
-   / needs-human) · **hard cap** (max iterations + cost/time). An unbounded goal is a cost risk.
+   never assert "tests pass." Persisted raw evidence lets a fresh checker reproduce the verdict;
+   a paraphrase is self-report, not proof.
+5. **Complete stop rules** — concrete **success**, **failure**, maximum **iterations**, **cost**, and
+   **wall-clock** bounds. An unbounded goal is a cost risk.
 
 ## Condition template (the goal block)
 
@@ -27,18 +27,18 @@ Scope:         only edit <paths>; do NOT touch <verification surface / other pac
 Verification:  run <exact cmd>; paste the raw output block + exit code (`echo $?`) — not a cherry-picked last line
 Stop:          success = <gate green, output pasted>
                failure = same check fails N× → stop, report blocked (do NOT edit the test)
-               max N iterations, cap <time/cost>
+               max_iterations = <N>; max_cost = <currency/tokens>; max_wall_clock = <duration>
                stop before <high-risk / irreversible action>
 ```
 
 **Compressed one-line form** (when the slice is small):
 
 ```
-Done when <cmd> shows <specific result>; <repo DoD — lint/typecheck/CI> still green; only edit <paths>; paste raw output block + exit code (`echo $?`); stop after N fails or M iters.
+Done when <cmd> shows <specific result>; <repo DoD — lint/typecheck/CI> still green; only edit <paths>; paste raw output block + exit code (`echo $?`); stop after N fails, M iterations, <cost>, or <wall-clock>.
 ```
 
-Both forms must survive the second-agent test below. Claude conditions are **≤ 4000 chars**; add
-`or stop after N turns` (soft — the evaluator weighs it, it is not a hard kill).
+Both forms must survive the second-agent test below. Platform-specific limits and invocation live
+only in the relevant adapter.
 
 ## Good vs bad
 
@@ -73,5 +73,4 @@ or re-read config for the real command) first.
   proxy — don't dress it up as behavioral.
 - **Forbid** editing, skipping, xfailing, or deleting the verification surface to reach green — encode
   that in `Scope: do NOT touch`.
-- Raw output **+ exit code**, every time. Paraphrased success is the enemy the transcript evaluator
-  can't catch.
+- Raw output **+ exit code**, every time. A paraphrase cannot be independently checked.
