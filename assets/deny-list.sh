@@ -155,24 +155,6 @@ else
   REPO_PHYS=""
 fi
 
-# lexically collapse '.' and '..' in an absolute path (no filesystem access)
-collapse() {
-  local IFS=/ part
-  local -a out
-  local n=0
-  for part in $1; do
-    case "$part" in
-      ''|.) : ;;
-      ..) [ "$n" -gt 0 ] && { n=$((n-1)); unset "out[$n]"; } ;;
-      *) out[$n]="$part"; n=$((n+1)) ;;
-    esac
-  done
-  local res="" i=0
-  while [ "$i" -lt "$n" ]; do res="$res/${out[$i]}"; i=$((i+1)); done
-  [ -z "$res" ] && res="/"
-  printf '%s' "$res"
-}
-
 # Resolve each existing component without relying on GNU-only `readlink -f`.
 # Dangling links are rejected; nonexistent ordinary tails remain valid writes.
 resolve_phys() {
@@ -260,7 +242,7 @@ check_target() {
   # expand a leading ~
   case "$t" in
     "~") t="$HOMEDIR" ;;
-    "~/"*) t="$HOMEDIR/${t#\~/}" ;;
+    \~/*) t="$HOMEDIR/${t#\~/}" ;;
   esac
   # expand ${HOME} and $HOME anywhere
   t="$(printf '%s' "$t" | sed -e "s#\${HOME}#${HOMEDIR}#g" -e "s#\$HOME#${HOMEDIR}#g")"
