@@ -1,0 +1,11 @@
+# id<TAB>canonical file<TAB>extended regular expression
+# Each row is one durable rule recovered from the legacy inventory.  It must
+# occur exactly once in its canonical destination, not be copied from history.
+G02_METHOD_CANONICALITY	shared/method.md	^# Canonical goal method$
+G02_EXTERNAL_AUTHORITY	shared/autonomy.md	EXPLICIT BOUNDED HUMAN AUTHORIZATION
+G02_SOURCE_INSTALL	docs/quickstart.md	current distribution model
+G02_MIT_LICENSE	LICENSE	^MIT License$
+G02_PRIVATE_VULNERABILITY_ROUTE	SECURITY.md	Report vulnerabilities privately through GitHub private vulnerability reporting
+G02_PRIVATE_ABUSE_ROUTE	SUPPORT.md	abuse-reporting instructions
+G02_CODEX_INVOCATION	docs/quickstart.md	\$writing-goals Turn the authentication migration
+G02_FULL_SUITE_REVIEW	CONTRIBUTING.md	^Run the portable contract suite:$

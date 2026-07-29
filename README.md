@@ -321,6 +321,6 @@ CI also runs ShellCheck on Ubuntu.
 Maintained by [iliaim](https://github.com/iliaim). Use the structured
 [issue forms](https://github.com/iliaim/writing-goals/issues/new/choose) for public documentation,
 compatibility, bug, and feature reports. Follow the [Code of Conduct](CODE_OF_CONDUCT.md) and
-GitHub's [abuse-reporting instructions](https://docs.github.com/en/communities/maintaining-your-safety-on-github/reporting-abuse-or-spam)
+GitHub's [private abuse-reporting route](https://docs.github.com/en/communities/maintaining-your-safety-on-github/reporting-abuse-or-spam)
 for abusive GitHub content that requires private handling. Report security vulnerabilities through
 [GitHub private vulnerability reporting](https://github.com/iliaim/writing-goals/security/advisories/new).

@@ -22,7 +22,7 @@ Classify each required fact:
   and a missing decomposition specification. Stop for an answer, or propose a bounded
   specification and get approval before execution.
 - **DERIVE-then-CONFIRM:** repository facts that can be discovered, such as commands, paths,
-  existing conventions, relative baselines, and a proposed execution budget. Read first, record
+  existing conventions, relative baselines, and candidate execution limits. Read first, record
   ambiguous choices, and confirm any choice that changes product behavior or scope.
 
 ## 3. Author one verifiable slice
@@ -43,7 +43,7 @@ build, typecheck, or lint is only a proxy unless it exercises the required behav
 
 For unattended work, configure the platform lifecycle gate to run a trusted, non-mutating
 verifier. Set `GATE_CMD`, `GOAL_GATE_CAP`, and `GATE_SURFACE` explicitly; there is no default test
-command or iteration budget. `GATE_SURFACE` is a whitespace-separated shell glob/list evaluated
+command or iteration cap. `GATE_SURFACE` is a whitespace-separated shell glob/list evaluated
 from the repository root: configure repo-relative entries, require at least one expansion, and
 ensure every expanded entry resolves to a regular file. A failing check may request another
 iteration below the cap. Passing permits a stop. Invalid configuration, invalid state, or reaching
