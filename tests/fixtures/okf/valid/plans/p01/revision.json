@@ -1,0 +1,14 @@
+{
+  "schema": "writing_goals_revision_manifest/1",
+  "objective_identity": "20260729-GV53BZ",
+  "revision": "p01",
+  "state": "frozen_approved",
+  "objective_snapshot": {
+    "path": "objective.md",
+    "byte_canonicalization": "none_raw_bytes",
+    "frozen_sha256": "98d754b0d1b705a01ec6e19a6655eff4ca555cd2671a1b40067699ed2ba93ae6"
+  },
+  "plan_payload": {
+    "frozen_sha256": "6b34feac73a8ccb2bbd5ae67a526051e74bff162120199537127b8fb7d87c37f"
+  }
+}
