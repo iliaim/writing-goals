@@ -92,6 +92,9 @@ home="$TEST_TMP/codex-clean"
 run_command env HOME="$home" CODEX_HOME="$home/.codex" bash "$sync" codex
 assert_success 'first empty Codex install succeeds'
 assert_link_target "$home/.codex/skills/writing-goals" "$REPO_DIR/codex" 'Codex install uses the canonical adapter-directory target'
+for role in planner challenger oracle-author maker verifier reviewer publisher; do
+  assert_link_target "$home/.codex/agents/writing-goals-$role.toml" "$REPO_DIR/codex/agents/writing-goals-$role.toml" "Codex install makes $role role discoverable"
+done
 
 # A clean all install must install both adapters at their canonical sources.
 home="$TEST_TMP/all-clean"
@@ -101,6 +104,7 @@ assert_link_target "$home/.claude/skills/writing-goals/SKILL.md" "$REPO_DIR/clau
 assert_link_target "$home/.claude/skills/writing-goals/shared" "$REPO_DIR/shared" 'all install uses canonical Claude shared target'
 assert_link_target "$home/.claude/skills/writing-goals/assets" "$REPO_DIR/assets" 'all install uses canonical Claude assets target'
 assert_link_target "$home/.codex/skills/writing-goals" "$REPO_DIR/codex" 'all install uses canonical Codex adapter target'
+assert_link_target "$home/.codex/agents/writing-goals-maker.toml" "$REPO_DIR/codex/agents/writing-goals-maker.toml" 'all install makes Codex maker role discoverable'
 
 # --force is deliberately narrow: it may replace the requested adapter only.
 home="$TEST_TMP/force-scope"
@@ -136,6 +140,26 @@ assert_nonzero 'all reports a later installation-time Codex failure'
 assert_not_contains "$(cat "$RUN_OUT")" 'Claude[[:space:]]+->' 'rolled-back all emits no premature Claude success message'
 assert_path_absent "$home/.claude/skills/writing-goals" 'all rolls back a clean Claude install after a later failure'
 assert_path_absent "$home/.codex/skills/writing-goals" 'all leaves no failed clean Codex destination'
+
+# A later role-link failure must roll back both adapters and every role link.
+role_shim_dir="$TEST_TMP/failing-role-ln"
+mkdir -p "$role_shim_dir"
+printf '%s\n' \
+  '#!/bin/sh' \
+  'last_arg=' \
+  'for arg do last_arg=$arg; done' \
+  'case "$last_arg" in' \
+  '  */.codex/agents/writing-goals-maker.toml) exit 73 ;;' \
+  'esac' \
+  'exec "$REAL_LN" "$@"' > "$role_shim_dir/ln"
+chmod +x "$role_shim_dir/ln"
+home="$TEST_TMP/all-role-runtime-rollback"
+run_command env HOME="$home" CODEX_HOME="$home/.codex" REAL_LN="$real_ln" PATH="$role_shim_dir:$PATH" bash "$sync" all
+assert_nonzero 'all reports a later Codex role-link failure'
+assert_path_absent "$home/.claude/skills/writing-goals" 'role-link rollback removes clean Claude install'
+assert_path_absent "$home/.codex/skills/writing-goals" 'role-link rollback removes clean Codex skill install'
+assert_path_absent "$home/.codex/agents/writing-goals-planner.toml" 'role-link rollback removes earlier Codex role links'
+assert_path_absent "$home/.codex/agents/writing-goals-maker.toml" 'role-link rollback leaves no failed Codex role link'
 
 home="$TEST_TMP/all-idempotent-runtime-rollback"
 run_command env HOME="$home" CODEX_HOME="$home/.codex" bash "$sync" all

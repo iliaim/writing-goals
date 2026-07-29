@@ -1,0 +1,8 @@
+# role	assertion_id	contract_pattern
+planner	G03_DISCOVERY_DIALOGUE	one question|single question
+challenger	G03_APPROVAL_BARRIER	approval|approved
+oracle-author	G03_ORACLE_PROTECTION	protected oracle|protected test|oracle_write_paths
+maker	G03_MAKER_BOUNDARY	maker_write_paths|bounded worktree|assigned worktree
+verifier	G03_ROLE_ISOLATION	read-only|read only|fresh
+reviewer	G03_ROLE_ISOLATION	read-only|read only|fresh
+publisher	G03_PUBLISHER_NO_MAKER_AUTHORITY	no maker authority|not.*maker authority

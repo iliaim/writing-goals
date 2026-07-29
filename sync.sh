@@ -26,6 +26,8 @@ esac
 claude_dest="$HOME/.claude/skills/writing-goals"
 codex_root="${CODEX_HOME:-$HOME/.codex}"
 codex_dest="$codex_root/skills/writing-goals"
+codex_agents_dir="$codex_root/agents"
+codex_role_names='planner challenger oracle-author maker verifier reviewer publisher'
 fail() {
   echo "ERROR: $*" >&2
   return 1
@@ -110,6 +112,19 @@ preflight_codex_destination() {
   fi
 }
 
+preflight_codex_roles() {
+  local role destination
+  preflight_ancestors "$codex_agents_dir/writing-goals-planner.toml" || return 1
+  [ "$force" -eq 1 ] && return 0
+  for role in $codex_role_names; do
+    destination="$codex_agents_dir/writing-goals-$role.toml"
+    if [ -e "$destination" ] || [ -L "$destination" ]; then
+      link_has_target "$destination" "$BD/codex/agents/writing-goals-$role.toml" ||
+        { fail "existing Codex role destination is not an installer link: $destination"; return 1; }
+    fi
+  done
+}
+
 preflight_claude() {
   require_file "$BD/claude/SKILL.md" || return 1
   require_dir "$BD/shared" || return 1
@@ -121,9 +136,13 @@ preflight_codex() {
   require_dir "$BD/codex" || return 1
   require_file "$BD/codex/SKILL.md" || return 1
   require_file "$BD/codex/agents/openai.yaml" || return 1
+  for role in $codex_role_names; do
+    require_file "$BD/codex/agents/writing-goals-$role.toml" || return 1
+  done
   require_dir "$BD/codex/shared" || return 1
   require_dir "$BD/codex/assets" || return 1
-  preflight_codex_destination
+  preflight_codex_destination || return 1
+  preflight_codex_roles
 }
 
 # Preflight has already established that dst is absent or an exact,
@@ -155,11 +174,20 @@ install_claude() {
 }
 
 install_codex() {
+  local role destination
   if [ "$force" -eq 1 ] && { [ -e "$codex_dest" ] || [ -L "$codex_dest" ]; }; then
     rm -rf -- "$codex_dest" || fail "cannot replace Codex target: $codex_dest" || return 1
   fi
   mkdir -p "$codex_root/skills" || fail "cannot create Codex skills root: $codex_root/skills" || return 1
   install_link "$BD/codex" "$codex_dest" || return 1
+  mkdir -p "$codex_agents_dir" || fail "cannot create Codex agents root: $codex_agents_dir" || return 1
+  for role in $codex_role_names; do
+    destination="$codex_agents_dir/writing-goals-$role.toml"
+    if [ "$force" -eq 1 ] && { [ -e "$destination" ] || [ -L "$destination" ]; }; then
+      rm -f -- "$destination" || fail "cannot replace Codex role target: $destination" || return 1
+    fi
+    install_link "$BD/codex/agents/writing-goals-$role.toml" "$destination" || return 1
+  done
   [ "$report_install" -eq 0 ] ||
     echo "Codex   -> $codex_dest  (invoke as \$writing-goals / /skills picker)"
 }
@@ -218,14 +246,27 @@ restore_destination() {
 }
 
 rollback_all() {
-  local claude_backup="$1" codex_backup="$2" failed=0
+  local claude_backup="$1" codex_backup="$2" role_backups="$3" failed=0 entry role backup
+  for entry in $role_backups; do
+    role="${entry%%:*}"
+    backup="${entry#*:}"
+    remove_transaction_role "$role" || failed=1
+    [ "$backup" = '-' ] || mv -- "$backup" "$codex_agents_dir/writing-goals-$role.toml" || failed=1
+  done
   restore_destination "$codex_dest" "$codex_backup" codex || failed=1
   restore_destination "$claude_dest" "$claude_backup" claude || failed=1
   [ "$failed" -eq 0 ]
 }
 
+remove_transaction_role() {
+  local role="$1" destination="$codex_agents_dir/writing-goals-$1.toml"
+  [ -e "$destination" ] || [ -L "$destination" ] || return 0
+  link_has_target "$destination" "$BD/codex/agents/writing-goals-$role.toml" || return 1
+  rm -f -- "$destination"
+}
+
 install_all_transactionally() {
-  local claude_backup="" codex_backup=""
+  local claude_backup="" codex_backup="" role_backups="" role destination
   report_install=0
 
   backup_destination "$claude_dest" || return 1
@@ -235,8 +276,21 @@ install_all_transactionally() {
     return 1
   fi
   codex_backup="$BACKUP_RESULT"
+  for role in $codex_role_names; do
+    destination="$codex_agents_dir/writing-goals-$role.toml"
+    backup_destination "$destination" || { rollback_all "$claude_backup" "$codex_backup" "$role_backups"; return 1; }
+    if [ -n "$BACKUP_RESULT" ]; then
+      role_backups="$role_backups $role:$BACKUP_RESULT"
+    else
+      role_backups="$role_backups $role:-"
+    fi
+  done
 
   if install_claude && install_codex; then
+    for entry in $role_backups; do
+      backup="${entry#*:}"
+      [ "$backup" = '-' ] || rm -f -- "$backup" || { fail "cannot remove Codex role transaction backup: $backup"; return 1; }
+    done
     [ -z "$codex_backup" ] || rm -rf -- "$codex_backup" ||
       { fail "cannot remove Codex transaction backup: $codex_backup" || return 1; }
     [ -z "$claude_backup" ] || rm -rf -- "$claude_backup" ||
@@ -246,7 +300,7 @@ install_all_transactionally() {
     return 0
   fi
 
-  if ! rollback_all "$claude_backup" "$codex_backup"; then
+  if ! rollback_all "$claude_backup" "$codex_backup" "$role_backups"; then
     fail "installation failed and transaction rollback was incomplete" || return 1
   fi
   return 1

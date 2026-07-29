@@ -2,8 +2,12 @@
 # ── required ──────────────────────────────────────────────────────────────
 id: <stable-slug>              # unique node key; other goals reference this in depends_on. Don't rename once set.
 title: <one-line human name>   # short imperative summary, e.g. "Persist sessions in Redis"
+observable_outcome: "<one complete, externally checkable result>"
 status: todo                   # todo | in_progress | blocked | in_review | done | cancelled  (drives run-loop + resume)
 depends_on: []                 # [ids] this goal waits on; empty = ready at start. DAG edges — must stay acyclic.
+start_gates: []                # genuine start gates: approved prerequisites, protected checks, and write boundary ready
+capsule_bound: "<smallest complete slice; split and name integration owner if exceeded>"
+integration_owner: <role-or-person responsible for combining split slices>
 acceptance:                    # the machine-checkable gate. Done ONLY when every item passes, verified fresh-context.
   - "<exact check + pass signal>"   # e.g. "pytest tests/test_session.py::roundtrip → PASS, exit 0"
 stop_rules:                    # every persisted sub-goal carries its own complete, concrete bounds
