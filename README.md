@@ -201,6 +201,15 @@ contract suite, builds a new bundle, and saves only the replaced writing-goals t
 explicit `--install` flag is required; the command never updates in the background or touches
 unrelated skills and agents.
 
+To inspect the current local targets and newest repository archive without changing anything, run:
+
+```bash
+bash scripts/refresh-local.sh --status
+```
+
+This prints the Claude and Codex target types (`missing`, `copy`, or `symlink`) followed by the
+absolute path of the lexically newest directory under `.archive/writing-goals/`, or `none`.
+
 ## Deterministic gate
 
 The gate is optional for interactive goal writing and required for unattended execution. Copy the

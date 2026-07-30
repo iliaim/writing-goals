@@ -6,11 +6,16 @@ usage() {
   printf 'usage: %s --install [claude|codex|all]\n' "$0" >&2
 }
 
+mode=install
 selection=all
 case "${1:-}" in
   --help|-h)
     usage
     exit 0
+    ;;
+  --status)
+    mode=status
+    [ "$#" -eq 1 ] || { usage; exit 2; }
     ;;
   --install)
     selection="${2:-all}"
@@ -23,9 +28,41 @@ case "${1:-}" in
     ;;
 esac
 
+source_root="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
+claude_target="$HOME/.claude/skills/writing-goals"
+codex_root="${CODEX_HOME:-$HOME/.codex}"
+codex_target="$codex_root/skills/writing-goals"
+
+if [ "$mode" = status ]; then
+  classify_target() {
+    if [ -L "$1" ]; then
+      printf '%s\n' symlink
+    elif [ -e "$1" ]; then
+      printf '%s\n' copy
+    else
+      printf '%s\n' missing
+    fi
+  }
+
+  latest_archive=none
+  archive_root="$source_root/.archive/writing-goals"
+  if [ -d "$archive_root" ]; then
+    for candidate in "$archive_root"/*; do
+      [ -d "$candidate" ] || continue
+      if [ "$latest_archive" = none ] || [[ "$candidate" > "$latest_archive" ]]; then
+        latest_archive="$candidate"
+      fi
+    done
+  fi
+
+  printf 'Claude: %s\n' "$(classify_target "$claude_target")"
+  printf 'Codex: %s\n' "$(classify_target "$codex_target")"
+  printf 'Latest archive: %s\n' "$latest_archive"
+  exit 0
+fi
+
 case "$selection" in claude|codex|all) ;; *) usage; exit 2 ;; esac
 
-source_root="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
 cd "$source_root"
 
 git rev-parse --is-inside-work-tree >/dev/null 2>&1 || {
@@ -55,9 +92,6 @@ backup_root="$source_root/.archive/writing-goals/$stamp"
 mkdir -p "$bundle_parent" "$backup_root"
 bash scripts/build-bundles.sh "$bundle"
 
-claude_target="$HOME/.claude/skills/writing-goals"
-codex_root="${CODEX_HOME:-$HOME/.codex}"
-codex_target="$codex_root/skills/writing-goals"
 roles='planner challenger oracle-author maker verifier reviewer publisher'
 backup_sources=()
 backup_destinations=()
