@@ -86,6 +86,7 @@ assert_file_contains "$readme" '\[Examples\]\(docs/examples\.md\)' 'README links
 assert_file_contains "$readme" '\[Security model\]\(docs/security-model\.md\)' 'README links the security model'
 assert_file_contains "$readme" 'scripts/build-bundles\.sh' 'README documents bundle construction'
 assert_file_contains "$readme" 'install\.sh' 'README documents bundle-local copy installation'
+assert_file_contains "$readme" 'refresh-local\.sh.*--install' 'README documents the explicit local refresh command'
 assert_file_contains "$readme" 'refuses an occupied target|force-overwrite' 'README documents collision refusal without overwrite'
 assert_file_contains "$readme" 'jq' 'README documents jq prerequisite'
 assert_file_contains "$readme" 'GATE_CMD' 'README documents trusted GATE_CMD'
@@ -103,6 +104,7 @@ assert_file_contains "$readme" 'bash tests/run.sh' 'README names the contract te
 assert_file_contains "$readme" 'out of scope' 'README says an external driver is out of scope'
 
 assert_file_contains "$REPO_DIR/docs/quickstart.md" '## Install|## Choose' 'quick start documents installation'
+assert_file_contains "$REPO_DIR/docs/quickstart.md" 'refresh-local\.sh.*--install' 'quick start documents the explicit local refresh command'
 assert_file_contains "$REPO_DIR/docs/quickstart.md" '/writing-goals' 'quick start documents Claude invocation'
 assert_file_contains "$REPO_DIR/docs/quickstart.md" '\$writing-goals' 'quick start documents Codex invocation'
 assert_file_contains "$REPO_DIR/docs/examples.md" 'Done when:|Done when ' 'examples include a completion contract'
