@@ -18,6 +18,10 @@ Do not create a new spec, ticket, map, or hierarchy as planning state; the appro
 their dependencies are sufficient. scope narrowing requires approval: return the proposal to the user
 rather than silently changing the parent objective.
 
+G13 is terminal only when all goals and final verification are complete. One
+human external-publication gate follows terminal G13 and is required before any
+push, pull request, merge, release, or deploy; there is no mid-plan human gate.
+
 ## G07 protected sequential core
 
 The host owns activation and continuation. Activation binds the approved identity, plan, run,

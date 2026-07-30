@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# G11 readiness has no GitHub CLI surface. Any invocation is an immediate fail.
+set -u
+printf 'gh' >> "$FAKE_TRANSCRIPT"
+for arg in "$@"; do printf ' <%s>' "$arg" >> "$FAKE_TRANSCRIPT"; done
+printf '\nG11 gh command prohibited\n' >&2
+exit 98
