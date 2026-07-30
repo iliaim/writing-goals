@@ -37,7 +37,6 @@ if [ -n "$(git status --porcelain)" ]; then
   exit 1
 fi
 
-git pull --ff-only
 bash tests/run.sh
 
 stamp="$(date -u +%Y%m%dT%H%M%SZ)"

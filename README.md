@@ -191,13 +191,15 @@ concurrent changes remain outside the installer contract.
 For a routine local refresh of both platforms, run:
 
 ```bash
+git pull --ff-only
 bash scripts/refresh-local.sh --install all
 ```
 
-It fast-forwards a clean checkout, runs the contract suite, builds a new bundle, and saves only
-the replaced writing-goals targets under `~/.writing-goals-backups/` before installing. Restart
-Codex and Claude Code afterward. The explicit `--install` flag is required; the command never
-updates in the background or touches unrelated skills and agents.
+The update command is an explicit human-controlled Git action. The refresh command then runs the
+contract suite, builds a new bundle, and saves only the replaced writing-goals targets under
+`~/.writing-goals-backups/` before installing. Restart Codex and Claude Code afterward. The
+explicit `--install` flag is required; the command never updates in the background or touches
+unrelated skills and agents.
 
 ## Deterministic gate
 

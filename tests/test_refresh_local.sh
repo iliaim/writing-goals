@@ -20,7 +20,6 @@ run_command bash "$refresh"
 assert_nonzero 'G09_SAFE_REFRESH: default invocation refuses to change installed copies'
 assert_contains "$(cat "$RUN_ERR")" 'explicit --install' 'G09_SAFE_REFRESH: refusal explains the required authority'
 
-assert_file_contains "$refresh" 'git pull --ff-only' 'G09_SAFE_REFRESH: refresh only permits fast-forward source updates'
 assert_file_contains "$refresh" 'bash tests/run\.sh' 'G09_SAFE_REFRESH: refresh verifies the source before installation'
 assert_file_contains "$refresh" 'scripts/build-bundles\.sh' 'G09_SAFE_REFRESH: refresh installs a self-contained bundle'
 assert_file_contains "$refresh" 'writing-goals-backups' 'G09_SAFE_REFRESH: refresh preserves replaced targets in a backup'

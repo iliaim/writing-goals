@@ -102,15 +102,16 @@ The scripts do not create containment. Read the
 Run the explicit local refresh command:
 
 ```bash
+git pull --ff-only
 bash scripts/refresh-local.sh --install all
 ```
 
-It refuses a dirty checkout, fast-forwards only, runs the contract suite, builds a new bundle,
-and moves just the replaced writing-goals targets to `~/.writing-goals-backups/`. It requires the
-explicit `--install` flag, does not run on a schedule, and does not change unrelated skills or
-agents. Restart Codex and Claude Code afterward. Review changed hooks before trusting them again.
-Codex records hook trust against the hook definition's hash; Claude projects should likewise
-review project hook changes.
+The update command is explicit; the refresh command refuses a dirty checkout, runs the contract
+suite, builds a new bundle, and moves just the replaced writing-goals targets to
+`~/.writing-goals-backups/`. It requires the explicit `--install` flag, does not run on a
+schedule, and does not change unrelated skills or agents. Restart Codex and Claude Code afterward.
+Review changed hooks before trusting them again. Codex records hook trust against the hook
+definition's hash; Claude projects should likewise review project hook changes.
 
 ## Uninstall
 
