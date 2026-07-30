@@ -12,6 +12,39 @@ case "${1:-}" in
     usage
     exit 0
     ;;
+  --status)
+    [ "$#" -eq 1 ] || { usage; exit 2; }
+    source_root="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
+    if [ "$HOME" = /Users/user ]; then
+      claude_target=/Users/user/.claude/skills/writing-goals
+    else
+      claude_target="$HOME/.claude/skills/writing-goals"
+    fi
+    codex_target="${CODEX_HOME:-$HOME/.codex}/skills/writing-goals"
+    archive_root="$source_root/.archive/writing-goals"
+
+    target_status() {
+      if [ -L "$1" ]; then
+        printf '%s' symlink
+      elif [ -e "$1" ]; then
+        printf '%s' copy
+      else
+        printf '%s' missing
+      fi
+    }
+
+    latest_archive="$(
+      if [ -d "$archive_root" ]; then
+        find "$archive_root" -mindepth 1 -maxdepth 1 -type d -print |
+          LC_ALL=C sort |
+          tail -n 1
+      fi
+    )"
+    printf 'Claude: %s\n' "$(target_status "$claude_target")"
+    printf 'Codex: %s\n' "$(target_status "$codex_target")"
+    printf 'Latest archive: %s\n' "${latest_archive:-none}"
+    exit 0
+    ;;
   --install)
     selection="${2:-all}"
     [ "$#" -le 2 ] || { usage; exit 2; }

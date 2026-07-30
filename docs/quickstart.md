@@ -106,6 +106,9 @@ git pull --ff-only
 bash scripts/refresh-local.sh --install all
 ```
 
+Run `bash scripts/refresh-local.sh --status` to report whether each platform target is missing, a
+copy, or a symlink, plus the latest repository-local archive. This status check is read-only.
+
 The update command is explicit; the refresh command refuses a dirty checkout, runs the contract
 suite, builds a new bundle, and moves just the replaced writing-goals targets to
 `.archive/writing-goals/` inside this repository. It requires the explicit `--install` flag, does not run on a

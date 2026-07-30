@@ -195,6 +195,9 @@ git pull --ff-only
 bash scripts/refresh-local.sh --install all
 ```
 
+To inspect the Claude and Codex target types and the latest repository-local archive without
+changing anything, run `bash scripts/refresh-local.sh --status`.
+
 The update command is an explicit human-controlled Git action. The refresh command then runs the
 contract suite, builds a new bundle, and saves only the replaced writing-goals targets under
 `.archive/writing-goals/` inside this repository before installing. Restart Codex and Claude Code afterward. The
