@@ -56,7 +56,11 @@ assert_empty_file() {
 }
 
 assert_file_contains() {
-  local file="$1" pattern="$2" label="$3"
+  local file="$1" pattern="$2" label="$3" tab
+  # GNU grep does not interpret \t in EREs, while BSD grep does.  Test
+  # callers use the readable spelling; normalize it to a literal tab first.
+  tab=$'\t'
+  pattern="${pattern//\\t/$tab}"
   TEST_COUNT=$((TEST_COUNT + 1))
   if [ -f "$file" ] && grep -Eq -- "$pattern" "$file"; then pass "$label"; else fail "$label (missing /$pattern/ in $file)"; fi
 }
