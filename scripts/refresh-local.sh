@@ -75,8 +75,8 @@ backup_target() {
 }
 
 restore_previous() {
-  local index
-  [ "$completed" = true ] && return
+  local status="$1" index
+  [ "$completed" = true ] && exit "$status"
   for target in "${published[@]}"; do
     [ ! -e "$target" ] && [ ! -L "$target" ] || rm -rf -- "$target"
   done
@@ -84,8 +84,9 @@ restore_previous() {
     mkdir -p "$(dirname -- "${backup_destinations[$index]}")"
     mv "${backup_sources[$index]}" "${backup_destinations[$index]}"
   done
+  exit "$status"
 }
-trap restore_previous EXIT HUP INT TERM
+trap 'status=$?; restore_previous "$status"' EXIT HUP INT TERM
 
 case "$selection" in
   claude)
