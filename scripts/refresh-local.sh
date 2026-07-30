@@ -16,6 +16,39 @@ case "${1:-}" in
     selection="${2:-all}"
     [ "$#" -le 2 ] || { usage; exit 2; }
     ;;
+  --status)
+    [ "$#" -eq 1 ] || { usage; exit 2; }
+    source_root="$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
+    if [ "$HOME" = /Users/user ]; then
+      claude_target=/Users/user/.claude/skills/writing-goals
+    else
+      claude_target="$HOME/.claude/skills/writing-goals"
+    fi
+    codex_target="${CODEX_HOME:-$HOME/.codex}/skills/writing-goals"
+
+    report_target() {
+      local label="$1" target="$2" state
+      if [ -L "$target" ]; then
+        state=symlink
+      elif [ -e "$target" ]; then
+        state=copy
+      else
+        state=missing
+      fi
+      printf '%s: %s\n' "$label" "$state"
+    }
+    report_target Claude "$claude_target"
+    report_target Codex "$codex_target"
+
+    archive_parent="$source_root/.archive/writing-goals"
+    latest_archive=none
+    if [ -d "$archive_parent" ]; then
+      latest_archive="$(find "$archive_parent" -mindepth 1 -maxdepth 1 -type d -print | LC_ALL=C sort | tail -n 1)"
+      latest_archive="${latest_archive:-none}"
+    fi
+    printf 'Latest archive: %s\n' "$latest_archive"
+    exit 0
+    ;;
   *)
     printf '%s\n' 'ERROR: explicit --install is required; no installed copies were changed.' >&2
     usage
