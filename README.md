@@ -293,6 +293,31 @@ Unattended work requires an OS-level sandbox, least privilege, read-only mounts 
 workspace, restricted egress, explicit budgets, protected gate state, and a kill path. See the
 [Security model](docs/security-model.md) and [`shared/autonomy.md`](shared/autonomy.md).
 
+## Maintainer benchmark harness
+
+The repository includes a local, unshipped benchmark harness under `benchmarks/`. It compares a
+frozen scenario across profiles while retaining separate worktrees, temporary homes, JSON event
+logs, an immutable run manifest, and an external scenario evaluator. Codex is the only implemented
+adapter today; the profile schema separates `host`, `model`, and `workflow` so a Claude adapter or
+an alternative workflow can be added without changing scenario or evaluator contracts.
+
+Start with a safe dry run:
+
+```bash
+bash benchmarks/run.sh \
+  --profile benchmarks/profiles/codex-control.conf \
+  --scenario benchmarks/scenarios/refresh-status \
+  --run-id control-smoke \
+  --dry-run
+```
+
+`--execute` creates a retained local benchmark worktree beneath `.archive/benchmarks/` and invokes
+`codex exec` with the profile's declared model and sandbox. It requires a clean source checkout.
+By default it uses `workspace-write`; dangerous Codex bypass mode is refused unless a caller in an
+externally sandboxed environment explicitly attests with `WG_EXTERNAL_SANDBOX=1`. The runner cannot
+verify that attestation, and a worktree alone is not a security boundary. Credentials are never stored in profiles or results; a caller may supply a regular
+`WG_CODEX_AUTH_SOURCE` file to seed the temporary Codex home for an authorized run.
+
 ## Documentation
 
 - [Quick start](docs/quickstart.md) — install, invoke, update, and remove the source distribution
@@ -319,6 +344,7 @@ workspace, restricted egress, explicit budgets, protected gate state, and a kill
 | [`tests/`](tests/) | Portable installer, gate, policy, and documentation contracts |
 | [`scripts/build-bundles.sh`](scripts/build-bundles.sh) | Deterministic portable bundle builder |
 | [`scripts/refresh-local.sh`](scripts/refresh-local.sh) | Explicit, tested local refresh with backups |
+| [`benchmarks/`](benchmarks/) | Maintainer-only reusable, provider-neutral benchmark harness |
 | [`install.sh`](install.sh) | Bundle-local copy installer |
 
 ## Verify this checkout

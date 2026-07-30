@@ -1,0 +1,23 @@
+Complete this task carefully. Inspect the repository, make the smallest correct change, add or
+update relevant tests, run verification, review the diff, and commit locally.
+
+Task: add a read-only `--status` mode to `scripts/refresh-local.sh`.
+
+Required behaviour:
+- `bash scripts/refresh-local.sh --status` exits 0.
+- It prints exactly one line for each item in this order:
+  - `Claude: missing`, `Claude: copy`, or `Claude: symlink`
+  - `Codex: missing`, `Codex: copy`, or `Codex: symlink`
+  - `Latest archive: none` or `Latest archive: <absolute path>`
+- Claude is `$HOME/.claude/skills/writing-goals` and Codex is
+  `${CODEX_HOME:-$HOME/.codex}/skills/writing-goals`.
+- The newest archive is the lexically newest directory below `.archive/writing-goals/`; report
+  `none` if it does not exist.
+- It must not create, modify, move, delete, install, or back up files.
+- Existing `--help` and `--install [claude|codex|all]` behaviour must remain unchanged.
+
+Constraints:
+- Work only in this assigned worktree.
+- Do not use network, `git push`, `gh`, pull requests, merges, deployment, or real user
+  installation paths.
+- Commit locally when complete.
