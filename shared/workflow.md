@@ -17,3 +17,21 @@ Perform one preapproval DAG review. Use sizing and ready-frontier guidance as a 
 Do not create a new spec, ticket, map, or hierarchy as planning state; the approved goal records and
 their dependencies are sufficient. scope narrowing requires approval: return the proposal to the user
 rather than silently changing the parent objective.
+
+## G07 protected sequential core
+
+The host owns activation and continuation. Activation binds the approved identity, plan, run,
+objective digest, plan digest, and frozen execution order; activation also binds the frozen order and digest.
+It validates that every declared node appears
+once in that order, that no unknown node appears, and that predecessor evidence is current. A stale
+predecessor, untrusted report, undeclared successor, or parallel-dispatch request fails closed.
+
+The host selects the first ready node in frozen order, then records its exact node and role cursor. The
+protected handoff sequence is `oracle-author`, `maker`, `verifier`, `reviewer`; an interrupted run resumes
+that recorded cursor rather than selecting a latest task or restarting a role. A completed checkpoint
+permits only the recorded successor and leaves the parent in progress until every ordered slice is complete.
+
+`assets/runtime-check.sh --core-fixture PATH --resume` is a non-mutating validation seam for this protocol.
+It reports the recorded cursor or an explicit rejection; it does not select work, dispatch an agent, create
+background continuation, or advance the parent. The host performs any selection and dispatch only after a
+successful check has returned.
