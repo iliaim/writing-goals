@@ -42,7 +42,7 @@ bash tests/run.sh
 stamp="$(date -u +%Y%m%dT%H%M%SZ)"
 bundle_parent="$source_root/dist"
 bundle="$bundle_parent/writing-goals-$stamp"
-backup_root="$HOME/.writing-goals-backups/$stamp"
+backup_root="$source_root/.archive/writing-goals/$stamp"
 [ ! -e "$bundle" ] && [ ! -L "$bundle" ] || {
   printf 'ERROR: bundle path already exists: %s\n' "$bundle" >&2
   exit 1
