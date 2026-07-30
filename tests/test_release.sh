@@ -41,6 +41,11 @@ assert_success 'G13_CLEAN_EXACT_CHECKOUT: checkout is detached at the exact cand
 pass 'G13_CLEAN_EXACT_CHECKOUT: commit/tree and worktree are exact and clean'
 
 run_command env HOME="$home" CODEX_HOME="$codex_home" G13_RELEASE_CHILD=1 bash "$checkout/tests/run.sh"
+if [ "$RUN_STATUS" -ne 0 ]; then
+  printf '%s\n' 'Detached candidate suite output follows:' >&2
+  cat "$RUN_OUT" >&2
+  cat "$RUN_ERR" >&2
+fi
 assert_success 'G13_RELEASE_MATRIX_COMPLETE: detached clean checkout passes the actual full suite with temporary homes'
 assert_contains "$(cat "$RUN_OUT")" '^==> test_conformance.sh$' 'G13_RELEASE_MATRIX_COMPLETE: detached suite executes protected conformance'
 assert_contains "$(cat "$RUN_OUT")" '^==> test_release.sh$' 'G13_RELEASE_MATRIX_COMPLETE: detached suite executes registered release oracle'
