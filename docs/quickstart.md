@@ -103,6 +103,7 @@ Run the explicit local refresh command:
 
 ```bash
 git pull --ff-only
+bash scripts/refresh-local.sh --status
 bash scripts/refresh-local.sh --install all
 ```
 
@@ -110,6 +111,8 @@ The update command is explicit; the refresh command refuses a dirty checkout, ru
 suite, builds a new bundle, and moves just the replaced writing-goals targets to
 `.archive/writing-goals/` inside this repository. It requires the explicit `--install` flag, does not run on a
 schedule, and does not change unrelated skills or agents. Restart Codex and Claude Code afterward.
+The optional `--status` command only reads and reports the Claude and Codex target types and the
+lexically newest repository archive.
 Review changed hooks before trusting them again. Codex records hook trust against the hook
 definition's hash; Claude projects should likewise review project hook changes.
 

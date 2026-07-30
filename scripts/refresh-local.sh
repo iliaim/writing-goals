@@ -6,6 +6,47 @@ usage() {
   printf 'usage: %s --install [claude|codex|all]\n' "$0" >&2
 }
 
+if [ "${1:-}" = --status ]; then
+  [ "$#" -eq 1 ] || { usage; exit 2; }
+
+  source_root="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
+  case "$HOME" in
+    /Users/user) claude_target="/Users/user/.claude/skills/writing-goals" ;;
+    *) claude_target="$HOME/.claude/skills/writing-goals" ;;
+  esac
+  codex_target="${CODEX_HOME:-$HOME/.codex}/skills/writing-goals"
+
+  if [ -L "$claude_target" ]; then
+    claude_status=symlink
+  elif [ -e "$claude_target" ]; then
+    claude_status=copy
+  else
+    claude_status=missing
+  fi
+
+  if [ -L "$codex_target" ]; then
+    codex_status=symlink
+  elif [ -e "$codex_target" ]; then
+    codex_status=copy
+  else
+    codex_status=missing
+  fi
+
+  archive_root="$source_root/.archive/writing-goals"
+  latest_archive="$(
+    if [ -d "$archive_root" ]; then
+      find "$archive_root" -mindepth 1 -maxdepth 1 -type d -print |
+        LC_ALL=C sort |
+        tail -n 1
+    fi
+  )"
+  [ -n "$latest_archive" ] || latest_archive=none
+
+  printf 'Claude: %s\nCodex: %s\nLatest archive: %s\n' \
+    "$claude_status" "$codex_status" "$latest_archive"
+  exit 0
+fi
+
 selection=all
 case "${1:-}" in
   --help|-h)

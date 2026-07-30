@@ -192,6 +192,7 @@ For a routine local refresh of both platforms, run:
 
 ```bash
 git pull --ff-only
+bash scripts/refresh-local.sh --status
 bash scripts/refresh-local.sh --install all
 ```
 
@@ -199,7 +200,8 @@ The update command is an explicit human-controlled Git action. The refresh comma
 contract suite, builds a new bundle, and saves only the replaced writing-goals targets under
 `.archive/writing-goals/` inside this repository before installing. Restart Codex and Claude Code afterward. The
 explicit `--install` flag is required; the command never updates in the background or touches
-unrelated skills and agents.
+unrelated skills and agents. The optional `--status` command is read-only and reports the Claude
+and Codex target types plus the lexically newest repository archive.
 
 ## Deterministic gate
 
