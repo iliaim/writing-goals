@@ -37,6 +37,9 @@ done
 validate_authority_path "$authority"
 case "$identity" in *[!A-Za-z0-9-]*|'') die 'invalid identity' ;; esac
 case "$plan" in p[0-9][0-9]) ;; *) die 'invalid plan' ;; esac
+# p03 is the recorded narrow correction to the completed p02 authority, not a
+# complete successor plan.  It must never be selected as an activation target.
+[ "$plan" != p03 ] || die 'partial correction plan is not activatable'
 case "$run" in *[!A-Za-z0-9._-]*|'') die 'invalid run' ;; esac
 if stat -f '%Lp' "$authority" >/dev/null 2>&1; then mode=$(stat -f '%Lp' "$authority"); else mode=$(stat -c '%a' "$authority" 2>/dev/null) || die 'cannot inspect authority permissions'; fi
 case "$mode" in ???) ;; *) die 'cannot inspect authority permissions' ;; esac

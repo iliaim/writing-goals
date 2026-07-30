@@ -63,6 +63,9 @@ done
 run_command activation_check "$authority/missing.receipt"
 assert_nonzero 'G13_P01_PREDECESSOR_BINDING_REJECTED: missing protected receipt rejects activation'
 
+run_command bash "$runtime" --authority "$authority" --identity "$identity" --plan p03 --run "$run" --status
+assert_nonzero 'G13_PARTIAL_SUCCESSOR_REJECTED: unactivated partial correction cannot become an activation target'
+
 assert_file_contains "$workflow" 'G13.*terminal|terminal.*G13' 'G13_LOCAL_ONLY_BOUNDARY_COVERED: terminal G13 is explicit'
 assert_file_contains "$REPO_DIR/shared/publication.md" 'human.*gate.*terminal G13|terminal G13.*human.*gate' 'G13_LOCAL_ONLY_BOUNDARY_COVERED: one post-G13 human external gate remains'
 production_remote_routes="$(find "$REPO_DIR/assets" "$REPO_DIR/scripts" -maxdepth 2 -type f -print | xargs grep -Eih '^[[:space:]]*(command[[:space:]]+)?(git[[:space:]]+(push|fetch|pull|remote)|gh[[:space:]]+(pr|release|api))([[:space:]]|$)' 2>/dev/null || true)"
