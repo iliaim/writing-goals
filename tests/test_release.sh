@@ -26,7 +26,7 @@ assert_success 'G13_CLEAN_EXACT_CHECKOUT: local exact candidate clone succeeds'
 run_command git -C "$checkout" checkout --quiet --detach "$commit"
 assert_success 'G13_CLEAN_EXACT_CHECKOUT: checkout is detached at the exact candidate commit'
 [ "$(git -C "$checkout" rev-parse HEAD)" = "$commit" ] || red 'detached commit drift'
-[ "$(git -C "$checkout" rev-parse HEAD^{tree}")" = "$tree" ] || red 'detached tree drift'
+[ "$(git -C "$checkout" rev-parse 'HEAD^{tree}')" = "$tree" ] || red 'detached tree drift'
 [ -z "$(git -C "$checkout" status --porcelain)" ] || red 'detached checkout is dirty'
 pass 'G13_CLEAN_EXACT_CHECKOUT: commit/tree and worktree are exact and clean'
 
