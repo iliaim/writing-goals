@@ -42,6 +42,8 @@ jobs:
 
       - name: Run ShellCheck
         if: runner.os == 'Linux'
-        # GATE_CMD is explicitly trusted shell source; evaluating it is the
-        # documented interface rather than accidental dynamic code.
-        run: shellcheck --exclude=SC2294 install.sh scripts/build-bundles.sh assets/*.sh
+        run: |
+          set -euo pipefail
+          set -- install.sh assets/*.sh scripts/*.sh tests/*.sh
+          shellcheck --exclude=SC2294 "$@"
+          printf '%s\n' 'SHELLCHECK_STATUS=PASSED'

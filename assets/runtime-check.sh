@@ -19,12 +19,12 @@ validate_authority_path() {
   done
   [ -d "$authority_input" ] && [ ! -L "$authority_input" ] || die 'authority must be a real directory'
 }
-authority='' identity='' plan='' run='' status=false reopen=false approval_revoked=false core_fixture='' activation_record='' resume=false
+authority='' identity='' plan='' run='' status=false reopen=false approval_revoked=false core_fixture='' activation_record='' activation_receipt='' resume=false
 while [ "$#" -gt 0 ]; do
   case "$1" in
-    --authority|--identity|--plan|--run|--core-fixture|--activation-record)
+    --authority|--identity|--plan|--run|--core-fixture|--activation-record|--activation-receipt)
       [ "$#" -ge 2 ] || die "missing value for $1"
-      case "$1" in --authority) authority=$2 ;; --identity) identity=$2 ;; --plan) plan=$2 ;; --run) run=$2 ;; --core-fixture) core_fixture=$2 ;; --activation-record) activation_record=$2 ;; esac
+      case "$1" in --authority) authority=$2 ;; --identity) identity=$2 ;; --plan) plan=$2 ;; --run) run=$2 ;; --core-fixture) core_fixture=$2 ;; --activation-record) activation_record=$2 ;; --activation-receipt) activation_receipt=$2 ;; esac
       shift 2 ;;
     --status) status=true; shift ;;
     --resume) resume=true; shift ;;
@@ -41,6 +41,34 @@ case "$run" in *[!A-Za-z0-9._-]*|'') die 'invalid run' ;; esac
 if stat -f '%Lp' "$authority" >/dev/null 2>&1; then mode=$(stat -f '%Lp' "$authority"); else mode=$(stat -c '%a' "$authority" 2>/dev/null) || die 'cannot inspect authority permissions'; fi
 case "$mode" in ???) ;; *) die 'cannot inspect authority permissions' ;; esac
 case "${mode#?}" in *[1-7]*) die 'authority is not protected' ;; esac
+
+# P02 activation is allowed only after the immutable p01 predecessor receipt
+# binds the frozen manifest, objective, commit, and tree.  These values are
+# protected plan authority, not caller-provided defaults.
+if [ "$plan" = p02 ]; then
+  [ -n "$activation_receipt" ] || die 'p02 activation requires a protected p01 receipt'
+  case "$activation_receipt" in "$authority"/*) ;; *) die 'activation receipt must be inside authority' ;; esac
+  [ -f "$activation_receipt" ] && [ ! -L "$activation_receipt" ] || die 'missing protected p01 receipt'
+  if stat -f '%Lp' "$activation_receipt" >/dev/null 2>&1; then activation_receipt_mode=$(stat -f '%Lp' "$activation_receipt"); else activation_receipt_mode=$(stat -c '%a' "$activation_receipt" 2>/dev/null) || die 'cannot inspect activation receipt permissions'; fi
+  [ "$activation_receipt_mode" = 600 ] || die 'activation receipt is not protected'
+
+  p01_revision_manifest_sha256='' p01_objective_sha256='' p01_commit='' p01_tree='' activation_receipt_keys=''
+  while IFS='=' read -r key value || [ -n "${key:-}" ]; do
+    case "$key" in p01_revision_manifest_sha256|p01_objective_sha256|p01_commit|p01_tree) ;; *) die 'invalid protected p01 receipt field' ;; esac
+    case "|$activation_receipt_keys|" in *"|$key|"*) die 'duplicate protected p01 receipt field' ;; esac
+    activation_receipt_keys="${activation_receipt_keys:+$activation_receipt_keys|}$key"
+    case "$key" in
+      p01_revision_manifest_sha256) p01_revision_manifest_sha256=$value ;;
+      p01_objective_sha256) p01_objective_sha256=$value ;;
+      p01_commit) p01_commit=$value ;;
+      p01_tree) p01_tree=$value ;;
+    esac
+  done < "$activation_receipt"
+  [ "$p01_revision_manifest_sha256" = 29d89429a80256000051d808dde8051b29400c75dee878677b2d3f0940c2e228 ] || die 'protected p01 manifest binding mismatch'
+  [ "$p01_objective_sha256" = 9d92b36f759f1f5d1bf3fc621843d50e6f78cc4816bf04bcc0c910dd457fe83e ] || die 'protected p01 objective binding mismatch'
+  [ "$p01_commit" = 0dbc8f4508a3a24b1eddc36ed85590cd5d853256 ] || die 'protected p01 commit binding mismatch'
+  [ "$p01_tree" = 5082f46ac22677075ccbda3ae9dcaaaab730482d ] || die 'protected p01 tree binding mismatch'
+fi
 
 # This seam deliberately validates an already-selected, immutable core record.
 # It is not a scheduler: the host supplies the fixture and performs any later
@@ -237,6 +265,7 @@ if [ "$reopen" = true ]; then
   exit 0
 fi
 [ "$status" = true ] || die 'only --status is supported'
+[ "$plan" != p02 ] || [ -e "$record" ] || { printf 'activation_receipt=p01-bound\n'; exit 0; }
 [ -f "$record" ] && [ ! -L "$record" ] || die 'missing protected record'
 
 found_identity='' found_plan='' found_run='' found_generation='' found_digest='' found_state='' found_candidate=''

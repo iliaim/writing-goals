@@ -141,6 +141,9 @@ There is no parallel continuation path.
 Approved execution may make **automatic local commits**. The v1 boundary is that all v1 state remains local; this accepts
 the single-machine risk rather than claiming durable recovery. GitHub Issues are a future, non-authoritative collaboration projection; Projects share that boundary. One post-G13 human external gate is the sole gate for external push, pull request, merge, release, or deploy; it is not a mid-plan pause.
 
+The Goal Ledger domain contains immutable Goal definitions and protected lifecycle records. Local
+plan and evidence artifacts are untrusted and cannot become lifecycle authority.
+
 ## Platform support
 
 | Capability | Claude Code | Codex |
