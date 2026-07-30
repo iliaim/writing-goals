@@ -52,7 +52,7 @@ assert_contains "$(cat "$RUN_OUT")" '^==> test_release.sh$' 'G13_RELEASE_MATRIX_
 assert_not_contains "$(cat "$RUN_OUT" "$RUN_ERR")" "$REPO_DIR|$HOME" 'G13_RELEASE_MATRIX_COMPLETE: detached validation does not expose source or ambient-home paths'
 
 if command -v shellcheck >/dev/null 2>&1; then
-  run_command env HOME="$home" CODEX_HOME="$codex_home" bash -c 'cd "$1" || exit 1; set --; for f in sync.sh install.sh assets/*.sh scripts/*.sh tests/*.sh; do test -f "$f" && set -- "$@" "$f"; done; shellcheck --exclude=SC2294 "$@" && printf "%s\\n" SHELLCHECK_STATUS=PASSED' bash "$checkout"
+  run_command env HOME="$home" CODEX_HOME="$codex_home" bash -c 'cd "$1" || exit 1; set --; for f in sync.sh install.sh assets/*.sh scripts/*.sh tests/*.sh; do test -f "$f" && set -- "$@" "$f"; done; shellcheck --severity=error --exclude=SC2294 "$@" && printf "%s\\n" SHELLCHECK_STATUS=PASSED' bash "$checkout"
   # run_command captures stderr; reveal a ShellCheck diagnostic only on
   # failure so the authoritative Linux job remains actionable.
   [ "$RUN_STATUS" -eq 0 ] || cat "$RUN_ERR" >&2

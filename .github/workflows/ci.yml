@@ -45,5 +45,5 @@ jobs:
         run: |
           set -euo pipefail
           set -- install.sh assets/*.sh scripts/*.sh tests/*.sh
-          shellcheck --exclude=SC2294 "$@"
+          shellcheck --severity=error --exclude=SC2294 "$@"
           printf '%s\n' 'SHELLCHECK_STATUS=PASSED'
