@@ -1,0 +1,10 @@
+task_class=docs_config
+objective=objective-01
+criterion=CHK-DOCS
+oracle_sha256=2222222222222222222222222222222222222222222222222222222222222222
+candidate_commit=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+candidate_tree=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+argv=bash|tests/test_docs.sh
+required_red_kind=docs_config
+required_red_assertion=G05_EXPECTED_DOCS_RED
+forbidden_context=maker-context-01

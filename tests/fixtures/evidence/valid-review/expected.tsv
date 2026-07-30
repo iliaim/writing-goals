@@ -1,0 +1,9 @@
+task_class=behavioral_code
+objective=objective-01
+criterion=CHK-GREEN
+oracle_sha256=5555555555555555555555555555555555555555555555555555555555555555
+candidate_commit=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+candidate_tree=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+review_scope=independent scope and risk review
+required_red_kind=none
+forbidden_context=maker-context-01

@@ -1,0 +1,10 @@
+task_class=behavioral_code
+objective=objective-01
+criterion=CHK-BEHAVIOR
+oracle_sha256=1111111111111111111111111111111111111111111111111111111111111111
+candidate_commit=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+candidate_tree=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+argv=bash|tests/test_behavior.sh
+required_red_kind=behavioral
+required_red_assertion=G05_EXPECTED_BEHAVIORAL_RED
+forbidden_context=maker-context-01

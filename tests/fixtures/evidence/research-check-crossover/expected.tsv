@@ -1,0 +1,9 @@
+task_class=research_design
+objective=objective-01
+criterion=CHK-RESEARCH
+oracle_sha256=4444444444444444444444444444444444444444444444444444444444444444
+candidate_commit=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+candidate_tree=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+argv=bash|tests/test_research.sh
+required_red_kind=none
+forbidden_context=maker-context-01
