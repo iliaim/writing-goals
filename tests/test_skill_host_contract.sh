@@ -31,6 +31,10 @@ run_command env -i PATH="$shim_dir:/usr/bin:/bin" HOME="$home" CODEX_HOME="$home
   WG_EVAL_OFFLINE_HOST_SHIMS=1 WG_EVAL_SHIM_LOG="$log" WG_EVAL_SHIM_RESOLUTION_LOG="$resolution_log" \
   WG_EVAL_EXPECT_HOME="$home" WG_EVAL_FORBID_PATH="$REPO_DIR" \
   bash -c 'cd "$1" && exec bash "$2" --host-contract --fixture-root "$3"' sh "$cwd" "$runner" "$fixtures"
+if [ "$RUN_STATUS" -ne 0 ]; then
+  printf '%s\n' 'Offline host-contract stderr follows:' >&2
+  cat "$RUN_ERR" >&2
+fi
 assert_success 'G10_HERMETIC_HOST_ENV: offline host contract succeeds in a fresh empty home'
 assert_file_contains "$resolution_log" "^${shim_dir}/claude$" \
   'G10_CLAUDE_ARGV_CONTRACT: resolved Claude command is the protected fixture shim'
