@@ -14,3 +14,6 @@
 
 # Locally built, timestamped refresh bundles are disposable artifacts.
 /dist/
+
+# Local refresh backups stay beside this checkout and are never repository content.
+/.archive/
