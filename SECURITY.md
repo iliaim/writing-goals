@@ -1,3 +1,7 @@
+---
+okf_version: "0.2"
+---
+
 # Security policy
 
 ## Supported versions

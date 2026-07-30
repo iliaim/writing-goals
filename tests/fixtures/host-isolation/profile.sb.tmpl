@@ -1,0 +1,6 @@
+; macOS sandbox-exec profile used by the G08 host-isolation fixture.
+(version 1)
+(deny default)
+(allow process*)
+(allow file-read*)
+(allow file-write* (subpath "__SOURCE__"))

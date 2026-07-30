@@ -1,3 +1,7 @@
+---
+okf_version: "0.2"
+---
+
 # writing-goals — as-built record
 
 This file records the implemented design as of 2026-07-28. It is a decision and compatibility
@@ -27,15 +31,15 @@ mechanics.
 | Decision | Implemented choice | Reason |
 |---|---|---|
 | Source layout | Canonical `shared/` method with thin adapters | Avoids divergent Claude/Codex policy |
-| Installation | Live symlinks from this checkout | One development source of truth |
-| Collision handling | Refuse by default; `--force` replaces only the selected target | Preserves user-owned skill content |
+| Installation | Deterministic, symlink-free bundles installed as local copies | Keeps installed skills independent of the source checkout |
+| Collision handling | Refuse non-identical occupied targets; no force-overwrite mode | Preserves user-owned skill content |
 | Verification | Trusted command Stop hook with explicit cap and surface | Gives the maker an independent, bounded checker |
 | Gate state | Session-keyed, mode-0600 state and failure log | Avoids model-facing command output and cross-session counters |
 | Surface protection | Read-only-to-maker surface before work, then a session-keyed digest | A first untrusted digest or writable state is not protection |
 | Retry outcome | `decision:block` below the configured cap | Requests another bounded iteration |
 | Terminal outcome | `continue:false` with a needs-human reason | Stops invalid, corrupt, or exhausted loops |
 | Safety policy | Deny-list as defense in depth inside an OS sandbox | Shell matching cannot provide containment |
-| Chaining | Persisted shallow DAG guidance only | Native cross-goal orchestration is not assumed |
+| Chaining | Protected host-owned sequential workflow | Checkpointed slices continue only in frozen order |
 | Dependencies | Bash, `jq`, and a SHA-256 utility | Keeps the implementation portable and auditable |
 | Public documentation | Outcome-led README with focused quick-start, example, and security guides | Gives users a first result without duplicating canonical policy |
 | License | MIT, copyright 2026 iliaim | Enables broad reuse with a short, standard notice obligation |
@@ -46,8 +50,8 @@ mechanics.
 | Surface | Claude Code | Codex | Repository contract |
 |---|---|---|---|
 | Skill invocation | `/writing-goals` | `$writing-goals`, `/skills`, or description match | Adapter-specific |
-| Install target | `~/.claude/skills/writing-goals` | `${CODEX_HOME:-$HOME/.codex}/skills/writing-goals` | `sync.sh all` preflights both and compensates handled failures |
-| Installed shape | Directory containing three canonical links | Symlink to the self-contained `codex/` directory | Re-running the same layout is idempotent |
+| Install target | `~/.claude/skills/writing-goals` | `${CODEX_HOME:-$HOME/.codex}/skills/writing-goals` | Bundle-local `install.sh all` preflights both and compensates handled failures |
+| Installed shape | Symlink-free copy tree | Symlink-free copy tree plus namespaced role files | Re-running an identical bundle layout is idempotent |
 | Project hook file | `.claude/settings.json` | `.codex/hooks.json` or platform-supported config | User reviews and trusts hook source |
 | Repository root | `CLAUDE_PROJECT_DIR` | Hook input `cwd` | Missing or invalid root fails closed |
 | Retry signal | `{"decision":"block","reason":"..."}` | Same | Clean exit with no JSON is green |
@@ -102,7 +106,8 @@ local audit workspaces are intentionally ignored and are not evidence artifacts.
 
 ## Boundaries and residual risk
 
-- An external driver for scheduling, resuming, or advancing a goal graph is out of scope.
+- The host-owned workflow is the only v1 continuation path; no separate scheduler or tracker
+  integration is part of the product.
 - The hooks do not contain a hostile or prompt-injected process. OS isolation and restricted
   credentials remain mandatory for unattended execution.
 - `GATE_CMD` is trusted shell code and must never be populated from untrusted text.

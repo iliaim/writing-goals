@@ -1,0 +1,9 @@
+# These are execution records from the retired .goals run, not product policy.
+# They must never be migrated into a live G02 destination.
+^status: done$
+^updated: 2026-07-28$
+^## Assumptions log$
+^## External setting verification$
+^## Context$
+^## How-to$
+^## Goal statement$

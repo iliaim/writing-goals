@@ -15,6 +15,18 @@ if ! printf '%s' "$INPUT" | jq -e . >/dev/null 2>&1; then
   exit 2
 fi
 
+# Validate the host contract before reading configuration or evaluating a gate.
+# In particular, do not coerce false/null values through jq's `//` operator:
+# they identify a malformed Stop event and must fail closed.
+validate_stop_payload() {
+  printf '%s' "$INPUT" | jq -e '
+    type == "object" and
+    (.session_id | type == "string") and
+    (.transcript_path | type == "string") and
+    (.stop_hook_active | type == "boolean")
+  ' >/dev/null 2>&1
+}
+
 stop_hook_active="$(printf '%s' "$INPUT" | jq -r '.stop_hook_active // false')"
 session_id="$(printf '%s' "$INPUT" | jq -r '.session_id // ""')"
 transcript_path="$(printf '%s' "$INPUT" | jq -r '.transcript_path // ""')"
@@ -32,6 +44,10 @@ terminal() {
     '{continue:false,stopReason:$reason}'
   exit 0
 }
+
+if ! validate_stop_payload; then
+  terminal "Stop hook payload does not match Claude's supported contract."
+fi
 
 # Configuration is deliberately explicit. Defaults can silently run the wrong
 # check, and non-canonical numbers are easy to interpret inconsistently.

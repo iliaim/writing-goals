@@ -1,3 +1,7 @@
+---
+okf_version: "0.2"
+---
+
 # Contributor Covenant Code of Conduct
 
 ## Our Pledge
@@ -54,8 +58,8 @@ appropriate. Do not publish conduct allegations, identifying details, private ev
 personal, confidential, or safety-sensitive information in a GitHub issue.
 
 For abusive behavior or content on GitHub that requires private handling, use GitHub's in-product
-**Report content** or **Block or Report** controls, or follow GitHub's
-[abuse-reporting instructions](https://docs.github.com/en/communities/maintaining-your-safety-on-github/reporting-abuse-or-spam).
+**Report content** or **Block or Report** controls, or use GitHub's
+[private abuse-reporting route](https://docs.github.com/en/communities/maintaining-your-safety-on-github/reporting-abuse-or-spam).
 Those reports are handled by GitHub Support rather than the repository maintainer. Private
 vulnerability reporting remains reserved for security vulnerabilities and must not be used for
 conduct reports.

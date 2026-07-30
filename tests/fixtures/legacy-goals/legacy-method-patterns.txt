@@ -1,0 +1,4 @@
+# The former generic budget language is not a durable method rule.  Concrete
+# stop-rule fields (iterations, cost, and wall-clock) remain the canonical form.
+proposed execution budget
+iteration budget

@@ -1,0 +1,6 @@
+# fact_id	url	checked_utc	contract implication
+G03_CLAUDE_LOCATION	https://code.claude.com/docs/en/sub-agents	2026-07-29	Project Claude definitions are Markdown files in .claude/agents with YAML frontmatter and a Markdown prompt body.
+G03_CLAUDE_FIELDS	https://code.claude.com/docs/en/sub-agents	2026-07-29	Claude requires name and description; tools and disallowedTools control the available tool pool.
+G03_CLAUDE_LIMIT	https://code.claude.com/docs/en/sub-agents	2026-07-29	Tool and permission restrictions can be affected by parent/session context, so role prose is not a complete enforcement boundary.
+G03_CODEX_ROLE_SCHEMA	https://github.com/openai/codex/blob/main/codex-rs/config/src/config_toml.rs	2026-07-29	Codex role declarations are keyed below agents and use description plus a config_file path; relative config paths resolve from the declaring config.toml.
+G03_CODEX_LIMIT	https://github.com/openai/codex/blob/main/codex-rs/config/src/config_toml.rs	2026-07-29	Codex role configuration is host configuration, not proof that natural-language path restrictions are OS-enforced.

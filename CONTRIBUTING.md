@@ -1,3 +1,7 @@
+---
+okf_version: "0.2"
+---
+
 # Contributing
 
 Contributions that improve correctness, portability, clarity, or verification are welcome.
@@ -48,7 +52,7 @@ make a change appear green.
   public compatibility surfaces.
 - Never include secrets, tokens, personal data, or machine-specific paths.
 
-Changes to `assets/gate.*.sh`, `assets/deny-list.sh`, `sync.sh`, or the security model require an
+Changes to `assets/gate.*.sh`, `assets/deny-list.sh`, `install.sh`, `scripts/build-bundles.sh`, or the security model require an
 explicit trust-boundary review in the pull request.
 
 ## Documentation changes
@@ -70,7 +74,7 @@ bash tests/run.sh
 On a system with ShellCheck:
 
 ```bash
-shellcheck --exclude=SC2294 sync.sh assets/*.sh
+shellcheck --exclude=SC2294 install.sh scripts/build-bundles.sh assets/*.sh
 ```
 
 The SC2294 exclusion is intentional because evaluating explicitly trusted `GATE_CMD` shell source

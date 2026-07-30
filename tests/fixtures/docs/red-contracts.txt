@@ -1,0 +1,3 @@
+bash tests/test_docs.sh | exit 1 | stderr: FAIL: G12_PUBLIC_DOCS_MISSING
+bash tests/test_legacy_public.sh | exit 1 | stderr: FAIL: G12_LEGACY_PUBLIC_REMAINS
+bash tests/test_owned_markdown.sh | exit 1 | stderr: FAIL: G12_MARKDOWN_ROUTE_INCOMPLETE

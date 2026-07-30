@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# Frozen G11 fake git: local readiness facts only; never delegates remotely.
+set -u
+printf 'git' >> "$FAKE_TRANSCRIPT"
+for arg in "$@"; do printf ' <%s>' "$arg" >> "$FAKE_TRANSCRIPT"; done
+printf '\n' >> "$FAKE_TRANSCRIPT"
+case "${1:-}" in
+  status) [ "${FAKE_SCENARIO:-valid}" = dirty ] && printf ' M uncommitted.txt\n' ;;
+  branch) printf '%s\n' "${FAKE_BRANCH:-codex/g11-readiness}" ;;
+  config) [ "${2:-}" = --get ] && [ "${3:-}" = remote.origin.url ] && printf '%s\n' "${FAKE_REMOTE_URL:-git@github.com:acme/writing-goals.git}" || { printf 'G11 invalid config query\n' >&2; exit 97; } ;;
+  show-ref) [ "${FAKE_SCENARIO:-valid}" != base-absent ] || exit 1 ;;
+  merge-base) [ "${FAKE_SCENARIO:-valid}" != base-not-ancestor ] || exit 1 ;;
+  remote) printf 'G11 git remote command prohibited\n' >&2; exit 98 ;;
+  rev-parse) case "${2:-}" in HEAD) printf '%s\n' "${FAKE_COMMIT:-1111111111111111111111111111111111111111}" ;; 'HEAD^{tree}') printf '%s\n' "${FAKE_TREE:-2222222222222222222222222222222222222222}" ;; esac ;;
+  ls-remote|push|fetch|pull|clone) printf 'G11 remote git command prohibited\n' >&2; exit 98 ;;
+  *) printf 'unexpected fake git command\n' >&2; exit 97 ;;
+esac

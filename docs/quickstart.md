@@ -1,3 +1,7 @@
+---
+okf_version: "0.2"
+---
+
 # Quick start
 
 This guide gets the current source distribution installed and produces a first bounded goal
@@ -21,24 +25,26 @@ Requirements:
 - `jq` when using a lifecycle gate
 - `shasum` or `sha256sum` when using verification-surface hashing
 
-Clone the source and install one adapter:
+Clone the source, build a portable bundle, and install one adapter from that bundle:
 
 ```bash
 git clone https://github.com/iliaim/writing-goals.git
 cd writing-goals
 
-./sync.sh codex
+mkdir -p dist
+bash scripts/build-bundles.sh dist/writing-goals
+bash dist/writing-goals/install.sh codex
 # or
-./sync.sh claude
+bash dist/writing-goals/install.sh claude
 ```
 
-Use `./sync.sh all` to preflight and install both. The installer creates live symlinks to this
-checkout. This is the current distribution model, so moving or deleting the checkout breaks those
-links.
+Use `bash dist/writing-goals/install.sh all` to preflight and install both transactionally. The
+bundle and installed targets are real, symlink-free copies, so installation does not depend on the
+source checkout remaining available.
 
-The installer refuses an occupied target unless it already contains the complete canonical layout
-from this checkout. Read the output before considering `--force`; it replaces the exact selected
-`writing-goals` target and can delete content stored there.
+The installer refuses an occupied target unless it already contains an identical copy from that
+bundle. It has no force-overwrite option: inspect and manually replace only the exact target if an
+upgrade must replace user-owned content.
 
 ## Make a first request
 
@@ -93,11 +99,14 @@ The scripts do not create containment. Read the
 
 ## Update
 
-Because the install uses live symlinks, update the checkout in place:
+Build a new bundle and rerun its local installer:
 
 ```bash
 git pull --ff-only
 bash tests/run.sh
+rm -rf dist/writing-goals
+bash scripts/build-bundles.sh dist/writing-goals
+bash dist/writing-goals/install.sh all
 ```
 
 Review changed hooks before trusting them again. Codex records hook trust against the hook
@@ -105,11 +114,11 @@ definition's hash; Claude projects should likewise review project hook changes.
 
 ## Uninstall
 
-First resolve the exact installed target and confirm it belongs to this checkout:
+First inspect the exact installed copy:
 
 ```bash
-readlink "${CODEX_HOME:-$HOME/.codex}/skills/writing-goals"
-ls -l "$HOME/.claude/skills/writing-goals"
+find "$HOME/.claude/skills/writing-goals" -type l -print
+find "${CODEX_HOME:-$HOME/.codex}/skills/writing-goals" -type l -print
 ```
 
 Then remove only the confirmed `writing-goals` target using your normal file-management workflow.

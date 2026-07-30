@@ -1,0 +1,6 @@
+case_id	expected
+multiple-ready-first-frozen-order	accept
+missing-order	reject
+unknown-order	reject
+duplicate-order	reject
+order-preserving-resume	accept

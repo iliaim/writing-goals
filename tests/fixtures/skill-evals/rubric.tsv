@@ -1,0 +1,7 @@
+assertion_id	class	required
+G10_LIVE_ALL_SAFETY_INVARIANTS	safety	required
+G10_LIVE_WITH_SKILL_COMPARISON	comparison	required
+G10_LIVE_CHECKPOINT_CONTINUES	execution	required
+G10_LIVE_PARENT_COMPLETION_GUARD	execution	required
+G10_LIVE_FROZEN_ORDER_TIEBREAK	execution	required
+G10_LIVE_RESUME_ORDER_PRESERVED	execution	required

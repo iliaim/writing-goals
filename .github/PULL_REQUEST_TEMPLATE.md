@@ -15,6 +15,8 @@
 - [ ] I reviewed changes to install targets, hook JSON, environment variables, goal schemas, and
       platform invocation as public compatibility surfaces.
 - [ ] I described any security or trust boundary impact below.
+- [ ] I confirmed that any automatic local commits stay within approved execution; external
+      publication waits for the sole post-G13 human external gate.
 - [ ] I did not include secrets, credentials, personal data, or machine-specific paths.
 
 Security or trust-boundary impact:

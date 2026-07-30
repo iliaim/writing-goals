@@ -1,0 +1,5 @@
+# Retired persistence-path terminology.  These patterns are checked only in
+# live product/configuration scopes; migration fixtures, plans, and history are
+# deliberately outside that scope.
+\.goals([/[:space:]]|$)
+_objective\.md

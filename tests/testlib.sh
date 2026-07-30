@@ -40,13 +40,13 @@ assert_nonzero() {
 assert_contains() {
   local text="$1" pattern="$2" label="$3"
   TEST_COUNT=$((TEST_COUNT + 1))
-  if printf '%s' "$text" | grep -Eq -- "$pattern"; then pass "$label"; else fail "$label (missing /$pattern/)"; fi
+  if grep -Eq -- "$pattern" <<< "$text"; then pass "$label"; else fail "$label (missing /$pattern/)"; fi
 }
 
 assert_not_contains() {
   local text="$1" pattern="$2" label="$3"
   TEST_COUNT=$((TEST_COUNT + 1))
-  if printf '%s' "$text" | grep -Eq -- "$pattern"; then fail "$label (unexpected /$pattern/)"; else pass "$label"; fi
+  if grep -Eq -- "$pattern" <<< "$text"; then fail "$label (unexpected /$pattern/)"; else pass "$label"; fi
 }
 
 assert_empty_file() {
@@ -56,7 +56,11 @@ assert_empty_file() {
 }
 
 assert_file_contains() {
-  local file="$1" pattern="$2" label="$3"
+  local file="$1" pattern="$2" label="$3" tab
+  # GNU grep does not interpret \t in EREs, while BSD grep does.  Test
+  # callers use the readable spelling; normalize it to a literal tab first.
+  tab=$'\t'
+  pattern="${pattern//\\t/$tab}"
   TEST_COUNT=$((TEST_COUNT + 1))
   if [ -f "$file" ] && grep -Eq -- "$pattern" "$file"; then pass "$label"; else fail "$label (missing /$pattern/ in $file)"; fi
 }

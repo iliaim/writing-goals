@@ -1,0 +1,8 @@
+case_id	expected
+missing-file-map	reject
+missing-ownership-map	reject
+unbound-command	reject
+lint-bypass	reject
+duplicated-plan-policy	reject
+mutable-receipt-payload	reject
+automatic-semantic-approval	reject

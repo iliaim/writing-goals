@@ -1,0 +1,6 @@
+request_id=req-041
+authorization: Bearer sk_live_G06SeedToken_7f3c2b1a9d
+workspace_root=/private/g06-redaction-root/workspace
+note=the complete value must never reach persisted evidence
+Authorization: token ghp_G06AnotherSeed_4e8a1c9f7b2d
+source_root=/Users/alice/private/g06-source-root

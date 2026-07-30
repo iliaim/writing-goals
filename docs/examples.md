@@ -1,3 +1,7 @@
+---
+okf_version: "0.2"
+---
+
 # Examples
 
 These examples demonstrate the contract shape. Commands, paths, targets, and budgets must be
@@ -45,15 +49,15 @@ reader will understand the prose, so a human or fresh-context editorial review r
 
 ## Larger approved objective
 
-A specification that needs multiple independently verifiable slices can use a shallow goal chain:
+A specification that needs multiple independently verifiable slices can use a shallow workspace plan:
 
 ```text
-.goals/
-  _objective.md
-  01-walking-skeleton.md
-  02-feature-a.md
-  03-feature-b.md
-  04-integration.md
+plans/p01/
+  objective.md
+  goals/g01-walking-skeleton.md
+  goals/g02-feature-a.md
+  goals/g03-feature-b.md
+  goals/g04-integration.md
 ```
 
 Each file has its own exact acceptance command and complete stop rules. Dependencies form an

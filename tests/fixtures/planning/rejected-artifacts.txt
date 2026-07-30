@@ -1,0 +1,5 @@
+# REQ-21 rejects these as new planning-state artifacts.
+spec
+ticket
+map
+hierarchy

@@ -1,0 +1,5 @@
+scenario_id	host	arm	assertion_id
+smoke-claude	claude	with_skill	G10_LIVE_WITH_SKILL_COMPARISON
+smoke-claude	claude	without_skill	G10_LIVE_WITH_SKILL_COMPARISON
+smoke-codex	codex	with_skill	G10_LIVE_WITH_SKILL_COMPARISON
+smoke-codex	codex	without_skill	G10_LIVE_WITH_SKILL_COMPARISON

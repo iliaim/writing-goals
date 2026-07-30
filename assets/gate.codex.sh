@@ -15,6 +15,19 @@ if ! printf '%s' "$INPUT" | jq -e . >/dev/null 2>&1; then
   exit 2
 fi
 
+# Validate the host contract before reading configuration or evaluating a gate.
+# A Stop event with missing or mistyped identity/root fields is not safe to
+# bind to persistent gate state, so it receives a terminal response.
+validate_stop_payload() {
+  printf '%s' "$INPUT" | jq -e '
+    type == "object" and
+    (.cwd | type == "string") and
+    (.session_id | type == "string") and
+    (.transcript_path | (type == "string" or type == "null")) and
+    (.stop_hook_active | type == "boolean")
+  ' >/dev/null 2>&1
+}
+
 stop_hook_active="$(printf '%s' "$INPUT" | jq -r '.stop_hook_active // false')"
 session_id="$(printf '%s' "$INPUT" | jq -r '.session_id // ""')"
 transcript_path="$(printf '%s' "$INPUT" | jq -r '.transcript_path // ""')"
@@ -32,6 +45,10 @@ terminal() {
     '{continue:false,stopReason:$reason}'
   exit 0
 }
+
+if ! validate_stop_payload; then
+  terminal "Stop hook payload does not match Codex's supported contract."
+fi
 
 if [ "${GATE_CMD+x}" != x ] || [ -z "$GATE_CMD" ]; then
   terminal "GATE_CMD must be set to a non-empty trusted command."

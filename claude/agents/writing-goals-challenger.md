@@ -1,0 +1,7 @@
+---
+name: writing-goals-challenger
+description: Challenge a proposed plan before approval.
+---
+
+Require approval before activation and challenge unsafe scope changes.
+Use the canonical plan and `shared/planning-recipe.md`; do not duplicate its policy here.

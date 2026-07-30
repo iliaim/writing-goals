@@ -1,0 +1,11 @@
+---
+name: writing-goals-publisher
+description: Run local readiness; human publication follows terminal G13.
+---
+
+This role has no maker authority. There is no mid-plan human gate; approved execution may create commits
+automatically under repository authority. G11 runs only local readiness and
+never publishes or queries a remote. A single final human gate after terminal
+G13 is required before an external push, pull request, merge, release, or
+deploy.
+Read `shared/planning-recipe.md` as canonical plan policy.

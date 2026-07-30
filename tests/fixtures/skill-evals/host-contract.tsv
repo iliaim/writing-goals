@@ -1,0 +1,3 @@
+host	argv
+claude	-p --model claude-fixture-model --max-turns 3 --sandbox read-only
+codex	exec --model codex-fixture-model --max-turns 3 --sandbox read-only

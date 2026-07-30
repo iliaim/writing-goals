@@ -35,10 +35,9 @@ assert_file_contains "$claude" 'GOAL_GATE_CAP.*<= 8|GOAL_GATE_CAP.*at least the 
 assert_file_contains "$codex" 'PreToolUse' 'Codex adapter documents PreToolUse coverage'
 assert_file_contains "$codex" 'Bash' 'Codex adapter names Bash PreToolUse coverage'
 assert_file_contains "$codex" 'apply_patch' 'Codex adapter names apply_patch PreToolUse coverage'
-assert_file_contains "$codex" 'MCP' 'Codex adapter names MCP PreToolUse coverage'
-assert_file_contains "$codex" 'local function' 'Codex adapter names other local-function PreToolUse coverage'
-assert_file_contains "$codex" 'Hosted tools.*excluded|Hosted tools.*No' 'Codex adapter documents hosted-tool exceptions'
-assert_file_contains "$codex" 'write_stdin.*not' 'Codex adapter documents write_stdin exception'
+assert_file_contains "$codex" 'validates only.*Bash' 'Codex adapter explicitly bounds validated PreToolUse coverage'
+assert_file_contains "$codex" 'do not infer coverage.*other tool.*payload shape' 'Codex adapter disclaims unvalidated tools and payloads'
+assert_not_contains "$(cat "$codex")" 'MCP|Hosted tools|write_stdin' 'Codex adapter makes no stale broad coverage claim'
 assert_file_contains "$claude" 'https://code.claude.com/docs/' 'Claude platform facts cite official documentation'
 assert_file_contains "$codex" 'https://learn.chatgpt.com/docs/hooks' 'Codex platform facts cite official documentation'
 assert_not_contains "$(cat "$codex")" '/goal' 'Codex adapter makes no unsupported /goal claim'
@@ -85,8 +84,9 @@ assert_file_contains "$readme" 'not a security boundary|not containment' 'README
 assert_file_contains "$readme" '\[Quick start\]\(docs/quickstart\.md\)' 'README links the detailed quick start'
 assert_file_contains "$readme" '\[Examples\]\(docs/examples\.md\)' 'README links checked examples'
 assert_file_contains "$readme" '\[Security model\]\(docs/security-model\.md\)' 'README links the security model'
-assert_file_contains "$readme" 'development install|live symlink' 'README explains live symlink development installs'
-assert_file_contains "$readme" '--force' 'README documents default refusal and --force'
+assert_file_contains "$readme" 'scripts/build-bundles\.sh' 'README documents bundle construction'
+assert_file_contains "$readme" 'install\.sh' 'README documents bundle-local copy installation'
+assert_file_contains "$readme" 'refuses an occupied target|force-overwrite' 'README documents collision refusal without overwrite'
 assert_file_contains "$readme" 'jq' 'README documents jq prerequisite'
 assert_file_contains "$readme" 'GATE_CMD' 'README documents trusted GATE_CMD'
 assert_file_contains "$readme" 'GOAL_GATE_CAP' 'README documents explicit gate cap'
@@ -116,6 +116,8 @@ assert_file_contains "$REPO_DIR/SECURITY.md" 'private vulnerability reporting|pr
 assert_file_contains "$REPO_DIR/SECURITY.md" 'supported|Supported' 'security policy explains supported versions'
 assert_file_contains "$REPO_DIR/CONTRIBUTING.md" 'bash tests/run\.sh' 'contributing guide gives the exact verification command'
 assert_file_contains "$REPO_DIR/CONTRIBUTING.md" 'trust boundary|security' 'contributing guide calls out safety-sensitive changes'
+assert_file_contains "$REPO_DIR/CONTRIBUTING.md" 'install\.sh.*scripts/build-bundles\.sh' 'contributing guide checks current installer scripts'
+assert_not_contains "$(cat "$REPO_DIR/CONTRIBUTING.md")" 'sync\.sh' 'contributing guide has no retired sync installer reference'
 assert_file_contains "$REPO_DIR/SUPPORT.md" 'issue|Issue' 'support policy names the support channel'
 assert_file_contains "$REPO_DIR/CODE_OF_CONDUCT.md" 'Our Standards' 'repository has enforceable conduct standards'
 assert_file_contains "$REPO_DIR/CHANGELOG.md" '## \[Unreleased\]' 'changelog has an Unreleased section'
@@ -123,6 +125,8 @@ assert_file_contains "$REPO_DIR/.github/PULL_REQUEST_TEMPLATE.md" 'bash tests/ru
 assert_file_contains "$REPO_DIR/.github/PULL_REQUEST_TEMPLATE.md" 'trust boundary|Security' 'pull request template asks about security impact'
 assert_file_contains "$REPO_DIR/.github/ISSUE_TEMPLATE/1-documentation.yml" '^name:' 'documentation issue form is discoverable'
 assert_file_contains "$REPO_DIR/.github/ISSUE_TEMPLATE/2-bug.yml" '^name:' 'bug issue form is discoverable'
+assert_file_contains "$REPO_DIR/.github/ISSUE_TEMPLATE/2-bug.yml" 'bundle/copy installer' 'bug form names the current installer'
+assert_not_contains "$(cat "$REPO_DIR/.github/ISSUE_TEMPLATE/2-bug.yml")" 'sync\.sh' 'bug form has no retired sync installer reference'
 assert_file_contains "$REPO_DIR/.github/ISSUE_TEMPLATE/3-compatibility.yml" '^name:' 'compatibility issue form is discoverable'
 assert_file_contains "$REPO_DIR/.github/ISSUE_TEMPLATE/4-feature-proposal.yml" '^name:.*[Ff]eature proposal' 'feature proposal issue form is discoverable'
 assert_file_contains "$REPO_DIR/.github/ISSUE_TEMPLATE/config.yml" 'blank_issues_enabled: false' 'issue chooser directs reporters to structured forms'
@@ -140,11 +144,12 @@ assert_file_contains "$REPO_DIR/SUPPORT.md" 'security/advisories/new' 'support p
 assert_file_contains "$REPO_DIR/SUPPORT.md" 'reporting-abuse-or-spam' 'support policy links the private GitHub abuse route'
 assert_file_contains "$readme" 'reporting-abuse-or-spam' 'README routes private GitHub abuse separately'
 assert_file_contains "$readme" 'security/advisories/new' 'README routes security vulnerabilities separately'
-assert_file_contains "$REPO_DIR/.goals/02-community-baseline.md" 'reserved for security' 'community goal records the security-only private route'
-assert_file_contains "$REPO_DIR/.goals/02-community-baseline.md" 'Private GitHub abuse is routed to GitHub Support' 'community goal records the private abuse route'
-assert_not_contains "$(cat "$REPO_DIR/.goals/02-community-baseline.md")" 'security and conduct policies' 'community goal has no stale route conflation'
 assert_file_contains "$REPO_DIR/PLAN.md" 'as-built|As-built' 'PLAN is an as-built record'
 assert_file_contains "$REPO_DIR/PLAN.md" 'compatibility' 'PLAN contains a compatibility record'
+assert_file_contains "$REPO_DIR/PLAN.md" 'Bundle-local `install\.sh all`|Symlink-free copy tree' 'PLAN records bundle copy installation'
+assert_not_contains "$(cat "$REPO_DIR/PLAN.md")" 'sync\.sh' 'PLAN has no retired sync installer reference'
+assert_not_contains "$(cat "$REPO_DIR/PLAN.md")" 'Live symlinks|live symlink' 'PLAN has no live-link installation semantics'
+assert_not_contains "$(cat "$REPO_DIR/PLAN.md")" '`--force`' 'PLAN has no force-overwrite installation semantics'
 assert_not_contains "$(cat "$REPO_DIR/PLAN.md")" 'Status:.*draft|Ready for your review before build' 'PLAN does not describe the implemented system as a draft'
 
 assert_file_contains "$REPO_DIR/.github/workflows/ci.yml" 'ubuntu-' 'CI runs on Ubuntu'
@@ -153,5 +158,40 @@ assert_file_contains "$REPO_DIR/.github/workflows/ci.yml" 'bash tests/run.sh' 'C
 assert_file_contains "$REPO_DIR/.github/workflows/ci.yml" 'shellcheck' 'CI installs and runs ShellCheck on Ubuntu'
 assert_file_contains "$REPO_DIR/.github/workflows/ci.yml" 'actions/checkout@[0-9a-f]{40}' 'CI pins checkout to a reviewed commit'
 assert_file_contains "$REPO_DIR/.github/workflows/ci.yml" 'persist-credentials:[[:space:]]*false' 'CI does not persist checkout credentials'
+
+# G12 public-integration contract.  These are intentionally separate from the
+# earlier documentation checks: G12 is the point at which the public reader
+# journey must describe the already-canonical v1 workflow without restating it.
+assert_file_contains "$readme" '\[Workflow contract\]\(shared/workflow\.md\)' 'G12_WORKFLOW_DOCS: README links the canonical workflow contract'
+assert_file_contains "$readme" 'checkpoint-then-continue|checkpoint then continue' 'G12_WORKFLOW_DOCS: README explains checkpoint-then-continue'
+assert_file_contains "$readme" 'automatic local commits' 'G12_POST_G13_EXTERNAL_GATE: README states the automatic local-commit boundary'
+assert_file_contains "$readme" 'post-G13|after terminal G13' 'G12_POST_G13_EXTERNAL_GATE: README identifies the one post-G13 gate'
+assert_file_contains "$readme" 'human external.*gate|external.*human.*gate' 'G12_POST_G13_EXTERNAL_GATE: README reserves external action for the human gate'
+assert_file_contains "$REPO_DIR/shared/publication.md" 'Approved execution may create commits automatically' 'G12_POST_G13_EXTERNAL_GATE: canonical publication policy permits automatic local commits'
+assert_file_contains "$REPO_DIR/shared/publication.md" 'One final human gate.*only after terminal G13' 'G12_POST_G13_EXTERNAL_GATE: canonical publication policy has one final external gate'
+assert_file_contains "$REPO_DIR/docs/security-model.md" 'OS-level sandbox' 'G12_SECURITY_CLAIMS: security guide names the actual containment boundary'
+assert_file_contains "$readme" '\[Security model\]\(docs/security-model\.md\)' 'G12_SECURITY_CLAIMS: README links the security model'
+assert_file_contains "$readme" 'all v1 state remains local' 'G12_LOCAL_ONLY_NO_EXPORT_OR_RESTORE: README states the local-only durability boundary'
+assert_file_contains "$readme" 'single-machine risk' 'G12_FAILURE_DOMAIN_LIMITS: README records the accepted failure domain'
+assert_not_contains "$(cat "$readme" "$REPO_DIR/docs"/*.md)" 'cross-host recovery|remote target|remote backup' 'G12_LOCAL_ONLY_NO_EXPORT_OR_RESTORE: public guides make no remote durability claim'
+assert_file_contains "$REPO_DIR/CONTEXT.md" 'immutable Goal definitions' 'G12_GOAL_LEDGER_DOMAIN: Goal Ledger includes immutable Goal definitions'
+assert_file_contains "$REPO_DIR/CONTEXT.md" 'protected lifecycle records' 'G12_GOAL_LEDGER_DOMAIN: Goal Ledger includes protected lifecycle records'
+assert_file_contains "$REPO_DIR/CONTEXT.md" 'local plan/evidence.*untrusted|local plan and evidence.*untrusted' 'G12_GOAL_LEDGER_DOMAIN: local plan and evidence are untrusted'
+assert_file_contains "$readme" 'GitHub Issues.*future.*non-authoritative|future.*non-authoritative.*GitHub Issues' 'G12_GITHUB_PROJECTION_FUTURE_ONLY: GitHub collaboration is future and non-authoritative'
+assert_not_contains "$(cat "$readme" "$REPO_DIR/docs"/*.md "$REPO_DIR/.github/PULL_REQUEST_TEMPLATE.md")" 'tracker (module|goal|bot|webhook|reverse sync|adapter)' 'G12_NO_TRACKER_SEAM: public surfaces expose no tracker seam'
+assert_file_contains "$REPO_DIR/shared/workflow.md" 'host owns activation and continuation' 'G12_HOST_NATIVE_SEQUENTIAL_SINGLE_MODEL: host owns sequential activation'
+assert_file_contains "$REPO_DIR/shared/workflow.md" 'parallel-dispatch request fails closed' 'G12_HOST_NATIVE_SEQUENTIAL_SINGLE_MODEL: parallel dispatch is rejected'
+assert_not_contains "$(cat "$codex")" 'external goal-chain driver' 'G12_HOST_NATIVE_SEQUENTIAL_SINGLE_MODEL: Codex skill makes no external-driver claim'
+assert_file_contains "$codex" 'host-native continuation|host native continuation' 'G12_HOST_NATIVE_SEQUENTIAL_SINGLE_MODEL: Codex skill declares host-native continuation'
+assert_file_contains "$codex" 'non-interactive entrypoint' 'G12_HOST_NATIVE_SEQUENTIAL_SINGLE_MODEL: Codex skill retains its non-interactive boundary'
+assert_file_contains "$REPO_DIR/shared/workflow.md" 'leaves the parent in progress until every ordered slice is complete' 'G12_PARENT_CHILD_COMPLETION_DOCS: only all slices complete the parent'
+assert_file_contains "$REPO_DIR/shared/workflow.md" 'background continuation, or advance the parent' 'G12_PARENT_CHILD_COMPLETION_DOCS: a checker cannot advance the parent'
+
+# The protected-red receipt needs a stable, goal-specific failure line rather
+# than a generic assertion summary.  Keep it immediately before finish_tests
+# so the normal assertion output remains useful to the maker.
+if [ "$TEST_FAILURES" -ne 0 ]; then
+  printf '%s\n' 'FAIL: G12_PUBLIC_DOCS_MISSING' >&2
+fi
 
 finish_tests

@@ -46,8 +46,8 @@
 #   * Recognized outbound network senders are DENIED by default (egress control
 #     belongs at the proxy layer, not here).
 #
-# SCOPE: this hook inspects SHELL commands (the Bash tool). File-write dangers
-# from the Edit/Write tools are covered by directory scoping, not here.
+# SCOPE: this hook validates only the supported `Bash` and `apply_patch`
+# payload contracts. It is not evidence of coverage for other host tools.
 #
 # WIRING: .claude/settings.json -> hooks.PreToolUse[] with matcher "Bash":
 #   {"matcher":"Bash","hooks":[{"type":"command","command":".../deny-list.sh"}]}
@@ -81,21 +81,39 @@ INPUT="$(cat)"
 if ! printf '%s' "$INPUT" | jq -e . >/dev/null 2>&1; then
   deny "hook stdin is not valid JSON; cannot reason about the command — failing closed."
 fi
-TOOL="$(printf '%s' "$INPUT" | jq -r '.tool_name // ""')"
-CMD_RAW="$(printf '%s' "$INPUT" | jq -r '.tool_input.command // ""')"
-PAYLOAD_CWD="$(printf '%s' "$INPUT" | jq -r '.cwd // ""')"
-
-# Only shell tools and Codex apply_patch are in scope. Anything else -> allow.
+# Only the documented Bash and apply_patch names are in scope. Anything else
+# is outside this bounded policy and proceeds through the host's normal flow.
+TOOL="$(printf '%s' "$INPUT" | jq -r 'if (.tool_name | type) == "string" then .tool_name else "" end')"
 case "$TOOL" in
-  Bash|bash|shell|Shell|apply_patch) : ;;
+  Bash|apply_patch) : ;;
   *) exit 0 ;;
 esac
+
+# Do not default a missing, null, or non-string command to an empty string:
+# doing so would silently bypass policy parsing for a supported tool.
+validate_payload_contract() {
+  printf '%s' "$INPUT" | jq -e '
+    type == "object" and
+    (.tool_name | type == "string") and
+    (.tool_name == "Bash" or .tool_name == "apply_patch") and
+    (.tool_input | type == "object") and
+    (.tool_input.command | type == "string") and
+    ((has("cwd") | not) or (.cwd | type == "string"))
+  ' >/dev/null 2>&1
+}
+
+if ! validate_payload_contract; then
+  deny "supported tool payload is missing required string fields or has an unsupported type — failing closed."
+fi
+
+CMD_RAW="$(printf '%s' "$INPUT" | jq -r '.tool_input.command')"
+PAYLOAD_CWD="$(printf '%s' "$INPUT" | jq -r '.cwd // ""')"
 
 # The bounded shell parser below is intentionally single-line. Failing closed
 # is safer than erasing command boundaries or pretending to understand quoted
 # newlines. Multiline apply_patch programs are validated separately.
 case "$TOOL" in
-  Bash|bash|shell|Shell)
+  Bash)
     case "$CMD_RAW" in
       *$'\n'*|*$'\r'*) deny "multiline shell commands are outside the bounded parser contract — failing closed." ;;
     esac

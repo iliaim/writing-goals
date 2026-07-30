@@ -1,0 +1,6 @@
+id: FIXTURE-PLAN
+task_class: docs_config
+requirements: [REQ-02]
+objective_acceptance: [OBJ-01]
+dag: [{id: author, depends_on: []}]
+workflow: [discover, author, lint, challenge, freeze]

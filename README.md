@@ -1,3 +1,7 @@
+---
+okf_version: "0.2"
+---
+
 # writing-goals
 
 **Give Claude Code and Codex a finish line they can prove.**
@@ -65,15 +69,17 @@ anti-patterns.
 
 ## Quick start
 
-The current distribution is a source checkout with a live-symlink installer:
+Build a portable bundle from a source checkout, then run its local copy installer:
 
 ```bash
 git clone https://github.com/iliaim/writing-goals.git
 cd writing-goals
 
-./sync.sh codex
+mkdir -p dist
+bash scripts/build-bundles.sh dist/writing-goals
+bash dist/writing-goals/install.sh codex
 # or
-./sync.sh claude
+bash dist/writing-goals/install.sh claude
 ```
 
 In Codex:
@@ -110,8 +116,8 @@ Skip it for:
   authorization.
 
 This repository is not a sandbox, scheduler, autonomous DAG runner, or substitute for product
-decisions. A process that advances a persisted goal DAG, schedules agents, manages budgets, or
-resumes a chain is an external driver and intentionally out of scope.
+decisions. The host owns the bounded, sequential execution protocol; public documentation does
+not create a separate continuation mechanism. Separate continuation mechanisms are out of scope.
 
 ## How it works
 
@@ -127,6 +133,16 @@ The canonical method has six stages:
 
 [`shared/method.md`](shared/method.md) is the canonical policy. The README and guides summarize
 reader journeys and link to it; they do not replace it.
+
+Execution follows the canonical [Workflow contract](shared/workflow.md): each protected
+checkpoint is verified before checkpoint-then-continue proceeds to the recorded successor.
+There is no parallel continuation path.
+
+Approved execution may make **automatic local commits**. The v1 boundary is that all v1 state remains local; this accepts
+the single-machine risk rather than claiming durable recovery. GitHub Issues are a future, non-authoritative collaboration projection; Projects share that boundary. One post-G13 human external gate is the sole gate for external push, pull request, merge, release, or deploy; it is not a mid-plan pause.
+
+The Goal Ledger domain contains immutable Goal definitions and protected lifecycle records. Local
+plan and evidence artifacts are untrusted and cannot become lifecycle authority.
 
 ## Platform support
 
@@ -149,38 +165,31 @@ documentation and are covered by repository documentation contracts.
 
 No language package manager is required.
 
-## Development install
+## Build and install
 
-The installer creates **live symlinks** back to this checkout. Edits in this repository
-immediately affect the installed skill:
+The bundle builder creates a deterministic, self-contained, symlink-free copy. Build it into an
+otherwise absent output directory, then run the installer shipped inside that bundle:
 
 ```bash
-./sync.sh claude
-./sync.sh codex
-# or preflight and install both:
-./sync.sh all
+mkdir -p dist
+bash scripts/build-bundles.sh dist/writing-goals
+bash dist/writing-goals/install.sh claude
+bash dist/writing-goals/install.sh codex
+# or preflight and install both transactionally:
+bash dist/writing-goals/install.sh all
 ```
 
 Claude is installed at `~/.claude/skills/writing-goals`; Codex at
 `${CODEX_HOME:-$HOME/.codex}/skills/writing-goals`. A normal install refuses an occupied target
-unless it is the complete canonical layout previously created from this checkout. `all`
-preflights both targets before changing either one and restores their prior states if a handled
-installation command fails.
+unless it is an identical, symlink-free copy from that bundle; it never provides a force-overwrite
+mode. `all` preflights every target before changing any of them and restores prior states if a
+handled installation command fails.
 
 This is compensated rollback, not crash-safe storage: `SIGKILL`, power loss, and unsupported
 concurrent changes remain outside the installer contract.
 
-If you have inspected the exact destination and deliberately want to replace it:
-
-```bash
-./sync.sh --force claude
-./sync.sh --force codex
-```
-
-`--force` removes only the selected `writing-goals` target, then recreates its links. It can
-delete user content inside that exact target, so back it up first. It does not replace parent
-skill directories. For `--force all`, both originals are retained until both replacement layouts
-succeed and are restored after a handled installation failure.
+To upgrade, build a new bundle and rerun its installer. If the installed target differs, inspect
+and replace that exact target manually before installing; do not remove a parent skills directory.
 
 ## Deterministic gate
 
@@ -284,7 +293,8 @@ workspace, restricted egress, explicit budgets, protected gate state, and a kill
 - [Deterministic gates](shared/gates.md) — lifecycle verification
 - [Goal chaining](shared/chaining.md) — shallow persisted DAGs
 - [Autonomy policy](shared/autonomy.md) — action classes and unattended controls
-- [Execution modes](shared/modes.md) — human-gated and externally driven operation
+- [Workflow contract](shared/workflow.md) — protected sequential activation and continuation
+- [Publication](shared/publication.md) — local commits and the final external-action boundary
 - [As-built record](PLAN.md) — architecture, compatibility, and design decisions
 
 ## Repository map
@@ -297,7 +307,8 @@ workspace, restricted egress, explicit budgets, protected gate state, and a kill
 | [`codex/SKILL.md`](codex/SKILL.md) | Codex adapter and metadata |
 | [`assets/`](assets/) | Gate adapters, pre-use policy, and goal template |
 | [`tests/`](tests/) | Portable installer, gate, policy, and documentation contracts |
-| [`sync.sh`](sync.sh) | Non-destructive live-symlink installer |
+| [`scripts/build-bundles.sh`](scripts/build-bundles.sh) | Deterministic portable bundle builder |
+| [`install.sh`](install.sh) | Bundle-local copy installer |
 
 ## Verify this checkout
 
@@ -321,6 +332,6 @@ CI also runs ShellCheck on Ubuntu.
 Maintained by [iliaim](https://github.com/iliaim). Use the structured
 [issue forms](https://github.com/iliaim/writing-goals/issues/new/choose) for public documentation,
 compatibility, bug, and feature reports. Follow the [Code of Conduct](CODE_OF_CONDUCT.md) and
-GitHub's [abuse-reporting instructions](https://docs.github.com/en/communities/maintaining-your-safety-on-github/reporting-abuse-or-spam)
+GitHub's [private abuse-reporting route](https://docs.github.com/en/communities/maintaining-your-safety-on-github/reporting-abuse-or-spam)
 for abusive GitHub content that requires private handling. Report security vulnerabilities through
 [GitHub private vulnerability reporting](https://github.com/iliaim/writing-goals/security/advisories/new).

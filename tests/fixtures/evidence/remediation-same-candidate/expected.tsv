@@ -1,0 +1,11 @@
+task_class=behavioral_code
+objective=objective-01
+criterion=CHK-GREEN
+oracle_sha256=5555555555555555555555555555555555555555555555555555555555555555
+candidate_commit=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+candidate_tree=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+argv=bash|tests/test_evidence.sh
+required_red_kind=none
+forbidden_context=maker-context-01
+remediation_of=failed-receipt-01
+previous_candidate_tree=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb

@@ -1,3 +1,7 @@
+---
+okf_version: "0.2"
+---
+
 # Investigate — zero-assumption repo discovery
 
 Run this **before** authoring a goal. You are finding the real verification surface, the exact

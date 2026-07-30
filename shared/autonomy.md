@@ -1,3 +1,7 @@
+---
+okf_version: "0.2"
+---
+
 # Autonomy policy — act unattended without silently guessing or doing damage
 
 This is the policy that lets an agent run a goal (or a chain) unattended. It reconciles

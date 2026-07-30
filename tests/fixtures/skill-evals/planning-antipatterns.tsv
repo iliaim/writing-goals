@@ -1,0 +1,13 @@
+case_id	expected
+fake-dependency	reject
+oversized-capsule	reject
+weak-internal-seam	reject
+duplicated-index	reject
+ignored-glossary-adr	reject
+gratuitous-expand-migrate-contract	reject
+delivery-disguised-as-research	reject
+new-hierarchy	reject
+separate-spec-ticket-map	reject
+no-interview-rule	reject
+labels-checklists-assignee-lock	reject
+tracker-adapter	reject

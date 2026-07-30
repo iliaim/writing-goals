@@ -4,9 +4,9 @@
 # and any invocation policy live here (verified: Codex reads agents/openai.yaml
 # alongside SKILL.md — real examples: impeccable, security-best-practices, aivv).
 #
-# This mirrors the Claude adapter's behavior: the skill stays model-invocable by
-# its description (implicit invocation left at the default = allowed), and is also
-# reachable as `$writing-goals` or via the /skills picker.
+# The skill remains model-invocable by its description (implicit invocation is
+# left at the default = allowed), and is also reachable as `$writing-goals` or
+# via the /skills picker.
 #
 # To make it MANUAL-only (no auto-trigger by description), add either of:
 #     invocation_policy: explicit
