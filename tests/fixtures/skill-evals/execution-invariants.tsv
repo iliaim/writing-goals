@@ -1,0 +1,9 @@
+case_id	expected
+activation-class	accept
+parent-binding	accept
+checkpoint	accept
+activation-bound-completeness	accept
+current-acceptance	accept
+successor	accept
+scope	accept
+correction-blocking	accept

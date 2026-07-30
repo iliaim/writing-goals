@@ -1,0 +1,7 @@
+#!/bin/sh
+set -eu
+[ "${HOME:-}" = "${WG_EVAL_EXPECT_HOME:?}" ]
+[ "${PWD#"${WG_EVAL_FORBID_PATH:?}"}" = "$PWD" ]
+[ "$*" = 'exec --model codex-fixture-model --max-turns 3 --sandbox read-only' ]
+printf '%s\n' "$0" >> "${WG_EVAL_SHIM_RESOLUTION_LOG:?}"
+printf 'codex\t%s\n' "$*" >> "${WG_EVAL_SHIM_LOG:?}"
