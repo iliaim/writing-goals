@@ -31,7 +31,7 @@ mechanics.
 | Decision | Implemented choice | Reason |
 |---|---|---|
 | Source layout | Canonical `shared/` method with thin adapters | Avoids divergent Claude/Codex policy |
-| Installation | Deterministic, symlink-free bundles installed as local copies | Keeps installed skills independent of the source checkout |
+| Installation | Deterministic, symlink-free bundles installed as local copies; explicit refresh backs up only replaced targets | Keeps installed skills independent of the source checkout while making routine updates recoverable |
 | Collision handling | Refuse non-identical occupied targets; no force-overwrite mode | Preserves user-owned skill content |
 | Verification | Trusted command Stop hook with explicit cap and surface | Gives the maker an independent, bounded checker |
 | Gate state | Session-keyed, mode-0600 state and failure log | Avoids model-facing command output and cross-session counters |

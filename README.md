@@ -188,8 +188,18 @@ handled installation command fails.
 This is compensated rollback, not crash-safe storage: `SIGKILL`, power loss, and unsupported
 concurrent changes remain outside the installer contract.
 
-To upgrade, build a new bundle and rerun its installer. If the installed target differs, inspect
-and replace that exact target manually before installing; do not remove a parent skills directory.
+For a routine local refresh of both platforms, run:
+
+```bash
+git pull --ff-only
+bash scripts/refresh-local.sh --install all
+```
+
+The update command is an explicit human-controlled Git action. The refresh command then runs the
+contract suite, builds a new bundle, and saves only the replaced writing-goals targets under
+`~/.writing-goals-backups/` before installing. Restart Codex and Claude Code afterward. The
+explicit `--install` flag is required; the command never updates in the background or touches
+unrelated skills and agents.
 
 ## Deterministic gate
 
@@ -308,6 +318,7 @@ workspace, restricted egress, explicit budgets, protected gate state, and a kill
 | [`assets/`](assets/) | Gate adapters, pre-use policy, and goal template |
 | [`tests/`](tests/) | Portable installer, gate, policy, and documentation contracts |
 | [`scripts/build-bundles.sh`](scripts/build-bundles.sh) | Deterministic portable bundle builder |
+| [`scripts/refresh-local.sh`](scripts/refresh-local.sh) | Explicit, tested local refresh with backups |
 | [`install.sh`](install.sh) | Bundle-local copy installer |
 
 ## Verify this checkout

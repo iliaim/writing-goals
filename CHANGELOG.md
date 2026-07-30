@@ -14,6 +14,7 @@ that release.
 
 ### Added
 
+- Explicit local plugin refresh with source verification and timestamped backups.
 - Public quick-start, worked-example, and security-model guides.
 - MIT license and community policies for security, support, conduct, and contributions.
 - Structured issue forms and a pull request evidence template.
