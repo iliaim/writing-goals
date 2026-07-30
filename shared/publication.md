@@ -1,7 +1,11 @@
+---
+okf_version: "0.2"
+---
+
 # Publication
 
-There is no mid-plan human publication gate. Approved execution may create
-commits automatically under its repository authority. G11 is a deterministic,
+There is no mid-plan human publication gate. Approved execution may create commits automatically
+under its repository authority. G11 is a deterministic,
 local-only readiness check: `assets/publish-readiness.sh` validates an explicit
 repository, remote, base, head, commit, and tree against clean local Git facts.
 It never reads authority or lifecycle artifacts and never contacts a remote.

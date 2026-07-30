@@ -1,3 +1,7 @@
+---
+okf_version: "0.2"
+---
+
 # Workflow — discover, approve, and execute one bounded plan
 
 Discovery is a dialogue: ask one question at a time, record two to four viable alternatives and

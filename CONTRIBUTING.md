@@ -1,3 +1,7 @@
+---
+okf_version: "0.2"
+---
+
 # Contributing
 
 Contributions that improve correctness, portability, clarity, or verification are welcome.

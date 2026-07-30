@@ -1,3 +1,7 @@
+---
+okf_version: "0.2"
+---
+
 # writing-goals
 
 **Give Claude Code and Codex a finish line they can prove.**
@@ -112,8 +116,8 @@ Skip it for:
   authorization.
 
 This repository is not a sandbox, scheduler, autonomous DAG runner, or substitute for product
-decisions. A process that advances a persisted goal DAG, schedules agents, manages budgets, or
-resumes a chain is an external driver and intentionally out of scope.
+decisions. The host owns the bounded, sequential execution protocol; public documentation does
+not create a separate continuation mechanism. Separate continuation mechanisms are out of scope.
 
 ## How it works
 
@@ -129,6 +133,13 @@ The canonical method has six stages:
 
 [`shared/method.md`](shared/method.md) is the canonical policy. The README and guides summarize
 reader journeys and link to it; they do not replace it.
+
+Execution follows the canonical [Workflow contract](shared/workflow.md): each protected
+checkpoint is verified before checkpoint-then-continue proceeds to the recorded successor.
+There is no parallel continuation path.
+
+Approved execution may make **automatic local commits**. The v1 boundary is that all v1 state remains local; this accepts
+the single-machine risk rather than claiming durable recovery. GitHub Issues are a future, non-authoritative collaboration projection; Projects share that boundary. One post-G13 human external gate is the sole gate for external push, pull request, merge, release, or deploy; it is not a mid-plan pause.
 
 ## Platform support
 
@@ -279,7 +290,8 @@ workspace, restricted egress, explicit budgets, protected gate state, and a kill
 - [Deterministic gates](shared/gates.md) — lifecycle verification
 - [Goal chaining](shared/chaining.md) — shallow persisted DAGs
 - [Autonomy policy](shared/autonomy.md) — action classes and unattended controls
-- [Execution modes](shared/modes.md) — human-gated and externally driven operation
+- [Workflow contract](shared/workflow.md) — protected sequential activation and continuation
+- [Publication](shared/publication.md) — local commits and the final external-action boundary
 - [As-built record](PLAN.md) — architecture, compatibility, and design decisions
 
 ## Repository map

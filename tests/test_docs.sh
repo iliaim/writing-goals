@@ -159,4 +159,39 @@ assert_file_contains "$REPO_DIR/.github/workflows/ci.yml" 'shellcheck' 'CI insta
 assert_file_contains "$REPO_DIR/.github/workflows/ci.yml" 'actions/checkout@[0-9a-f]{40}' 'CI pins checkout to a reviewed commit'
 assert_file_contains "$REPO_DIR/.github/workflows/ci.yml" 'persist-credentials:[[:space:]]*false' 'CI does not persist checkout credentials'
 
+# G12 public-integration contract.  These are intentionally separate from the
+# earlier documentation checks: G12 is the point at which the public reader
+# journey must describe the already-canonical v1 workflow without restating it.
+assert_file_contains "$readme" '\[Workflow contract\]\(shared/workflow\.md\)' 'G12_WORKFLOW_DOCS: README links the canonical workflow contract'
+assert_file_contains "$readme" 'checkpoint-then-continue|checkpoint then continue' 'G12_WORKFLOW_DOCS: README explains checkpoint-then-continue'
+assert_file_contains "$readme" 'automatic local commits' 'G12_POST_G13_EXTERNAL_GATE: README states the automatic local-commit boundary'
+assert_file_contains "$readme" 'post-G13|after terminal G13' 'G12_POST_G13_EXTERNAL_GATE: README identifies the one post-G13 gate'
+assert_file_contains "$readme" 'human external.*gate|external.*human.*gate' 'G12_POST_G13_EXTERNAL_GATE: README reserves external action for the human gate'
+assert_file_contains "$REPO_DIR/shared/publication.md" 'Approved execution may create commits automatically' 'G12_POST_G13_EXTERNAL_GATE: canonical publication policy permits automatic local commits'
+assert_file_contains "$REPO_DIR/shared/publication.md" 'One final human gate.*only after terminal G13' 'G12_POST_G13_EXTERNAL_GATE: canonical publication policy has one final external gate'
+assert_file_contains "$REPO_DIR/docs/security-model.md" 'OS-level sandbox' 'G12_SECURITY_CLAIMS: security guide names the actual containment boundary'
+assert_file_contains "$readme" '\[Security model\]\(docs/security-model\.md\)' 'G12_SECURITY_CLAIMS: README links the security model'
+assert_file_contains "$readme" 'all v1 state remains local' 'G12_LOCAL_ONLY_NO_EXPORT_OR_RESTORE: README states the local-only durability boundary'
+assert_file_contains "$readme" 'single-machine risk' 'G12_FAILURE_DOMAIN_LIMITS: README records the accepted failure domain'
+assert_not_contains "$(cat "$readme" "$REPO_DIR/docs"/*.md)" 'cross-host recovery|remote target|remote backup' 'G12_LOCAL_ONLY_NO_EXPORT_OR_RESTORE: public guides make no remote durability claim'
+assert_file_contains "$REPO_DIR/CONTEXT.md" 'immutable Goal definitions' 'G12_GOAL_LEDGER_DOMAIN: Goal Ledger includes immutable Goal definitions'
+assert_file_contains "$REPO_DIR/CONTEXT.md" 'protected lifecycle records' 'G12_GOAL_LEDGER_DOMAIN: Goal Ledger includes protected lifecycle records'
+assert_file_contains "$REPO_DIR/CONTEXT.md" 'local plan/evidence.*untrusted|local plan and evidence.*untrusted' 'G12_GOAL_LEDGER_DOMAIN: local plan and evidence are untrusted'
+assert_file_contains "$readme" 'GitHub Issues.*future.*non-authoritative|future.*non-authoritative.*GitHub Issues' 'G12_GITHUB_PROJECTION_FUTURE_ONLY: GitHub collaboration is future and non-authoritative'
+assert_not_contains "$(cat "$readme" "$REPO_DIR/docs"/*.md "$REPO_DIR/.github/PULL_REQUEST_TEMPLATE.md")" 'tracker (module|goal|bot|webhook|reverse sync|adapter)' 'G12_NO_TRACKER_SEAM: public surfaces expose no tracker seam'
+assert_file_contains "$REPO_DIR/shared/workflow.md" 'host owns activation and continuation' 'G12_HOST_NATIVE_SEQUENTIAL_SINGLE_MODEL: host owns sequential activation'
+assert_file_contains "$REPO_DIR/shared/workflow.md" 'parallel-dispatch request fails closed' 'G12_HOST_NATIVE_SEQUENTIAL_SINGLE_MODEL: parallel dispatch is rejected'
+assert_not_contains "$(cat "$codex")" 'external goal-chain driver' 'G12_HOST_NATIVE_SEQUENTIAL_SINGLE_MODEL: Codex skill makes no external-driver claim'
+assert_file_contains "$codex" 'host-native continuation|host native continuation' 'G12_HOST_NATIVE_SEQUENTIAL_SINGLE_MODEL: Codex skill declares host-native continuation'
+assert_file_contains "$codex" 'non-interactive entrypoint' 'G12_HOST_NATIVE_SEQUENTIAL_SINGLE_MODEL: Codex skill retains its non-interactive boundary'
+assert_file_contains "$REPO_DIR/shared/workflow.md" 'leaves the parent in progress until every ordered slice is complete' 'G12_PARENT_CHILD_COMPLETION_DOCS: only all slices complete the parent'
+assert_file_contains "$REPO_DIR/shared/workflow.md" 'background continuation, or advance the parent' 'G12_PARENT_CHILD_COMPLETION_DOCS: a checker cannot advance the parent'
+
+# The protected-red receipt needs a stable, goal-specific failure line rather
+# than a generic assertion summary.  Keep it immediately before finish_tests
+# so the normal assertion output remains useful to the maker.
+if [ "$TEST_FAILURES" -ne 0 ]; then
+  printf '%s\n' 'FAIL: G12_PUBLIC_DOCS_MISSING' >&2
+fi
+
 finish_tests

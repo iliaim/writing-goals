@@ -1,3 +1,7 @@
+---
+okf_version: "0.2"
+---
+
 # OKF workspace contract
 
 `writing-goals` uses [OKF](https://okfn.org/) concepts for repository-owned Markdown while

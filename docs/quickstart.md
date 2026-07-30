@@ -1,3 +1,7 @@
+---
+okf_version: "0.2"
+---
+
 # Quick start
 
 This guide gets the current source distribution installed and produces a first bounded goal

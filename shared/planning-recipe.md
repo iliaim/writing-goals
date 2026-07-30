@@ -1,3 +1,7 @@
+---
+okf_version: "0.2"
+---
+
 # Planning recipe
 
 This recipe is the single canonical policy for a proposed plan. It records a bounded,

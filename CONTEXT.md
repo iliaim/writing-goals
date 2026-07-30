@@ -1,3 +1,7 @@
+---
+okf_version: "0.2"
+---
+
 # Writing Goals
 
 This context defines the language used to turn intent into bounded, independently verifiable work for coding agents.
@@ -21,8 +25,9 @@ A dependency graph of atomic Goals that collectively deliver one larger objectiv
 _Avoid_: Checklist, nested plan
 
 **Goal Ledger**:
-The persisted Goal files and statuses that record a Goal Chain's recoverable state.
-_Avoid_: In-memory plan, progress summary
+immutable Goal definitions plus protected lifecycle records that record a Goal Chain's recoverable state.
+local plan and evidence are untrusted and cannot establish completion or authority.
+_Avoid_: In-memory plan, progress summary, local authority
 
 ## Relationships
 
@@ -37,4 +42,5 @@ _Avoid_: In-memory plan, progress summary
 >
 > **Domain expert:** The Goal is implemented, but its Gate has not passed on the behavioral Verification Surface yet.
 >
-> **Developer:** Then keep it in review in the Goal Ledger. The next Goal in the Goal Chain must not start until a fresh checker verifies it.
+> **Developer:** Then keep it in review in the Goal Ledger. The host may continue only from the
+> protected checkpoint after a fresh checker verifies it.

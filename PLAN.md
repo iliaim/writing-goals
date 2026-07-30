@@ -1,3 +1,7 @@
+---
+okf_version: "0.2"
+---
+
 # writing-goals — as-built record
 
 This file records the implemented design as of 2026-07-28. It is a decision and compatibility
@@ -35,7 +39,7 @@ mechanics.
 | Retry outcome | `decision:block` below the configured cap | Requests another bounded iteration |
 | Terminal outcome | `continue:false` with a needs-human reason | Stops invalid, corrupt, or exhausted loops |
 | Safety policy | Deny-list as defense in depth inside an OS sandbox | Shell matching cannot provide containment |
-| Chaining | Persisted shallow DAG guidance only | Native cross-goal orchestration is not assumed |
+| Chaining | Protected host-owned sequential workflow | Checkpointed slices continue only in frozen order |
 | Dependencies | Bash, `jq`, and a SHA-256 utility | Keeps the implementation portable and auditable |
 | Public documentation | Outcome-led README with focused quick-start, example, and security guides | Gives users a first result without duplicating canonical policy |
 | License | MIT, copyright 2026 iliaim | Enables broad reuse with a short, standard notice obligation |
@@ -102,7 +106,8 @@ local audit workspaces are intentionally ignored and are not evidence artifacts.
 
 ## Boundaries and residual risk
 
-- An external driver for scheduling, resuming, or advancing a goal graph is out of scope.
+- The host-owned workflow is the only v1 continuation path; no separate scheduler or tracker
+  integration is part of the product.
 - The hooks do not contain a hostile or prompt-injected process. OS isolation and restricted
   credentials remain mandatory for unattended execution.
 - `GATE_CMD` is trusted shell code and must never be populated from untrusted text.

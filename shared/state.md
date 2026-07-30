@@ -1,7 +1,12 @@
+---
+okf_version: "0.2"
+---
+
 # Protected lifecycle state
 
-Lifecycle state belongs only in an external protected authority directory. The
-repository and its `.writing-goals` data are not a fallback source of truth.
+Lifecycle state belongs only in a local protected authority directory. The repository and its
+local planning data are not a fallback source of truth. This v1 boundary accepts a single-machine
+risk; it provides no export or cross-host recovery mechanism.
 The authority is an absolute, non-symlinked directory that is not writable by
 group or other users.
 

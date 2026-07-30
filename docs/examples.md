@@ -1,3 +1,7 @@
+---
+okf_version: "0.2"
+---
+
 # Examples
 
 These examples demonstrate the contract shape. Commands, paths, targets, and budgets must be

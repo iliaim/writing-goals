@@ -1,3 +1,7 @@
+---
+okf_version: "0.2"
+---
+
 # Verification evidence
 
 The closed task classes are `behavioral_code`, `docs_config`, `refactor`, and `research_design`.

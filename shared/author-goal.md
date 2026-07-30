@@ -1,3 +1,7 @@
+---
+okf_version: "0.2"
+---
+
 # Author-goal — goal anatomy + templates
 
 You've investigated (`shared/investigate.md`) and classified every fact. Now assemble the goal. A

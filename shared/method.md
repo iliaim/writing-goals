@@ -1,3 +1,7 @@
+---
+okf_version: "0.2"
+---
+
 # Canonical goal method
 
 This is the platform-neutral contract for writing and running goals. Platform adapters must
@@ -79,8 +83,9 @@ execution; a human may instead perform or separately authorize an appropriate co
 workflow. Repository commits require user or repository policy authority.
 
 Hooks are defense in depth, not containment. Unattended execution requires an OS sandbox,
-least privilege, scoped writable mounts, restricted egress, budgets, and a kill path. Select the
-driver model in `shared/modes.md`; neither platform natively advances a persisted goal DAG.
+least privilege, scoped writable mounts, restricted egress, budgets, and a kill path. The host
+uses the protected sequential workflow in `shared/workflow.md`; `shared/modes.md` states the
+single execution mode.
 
 ## Completion checklist
 

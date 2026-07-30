@@ -1,3 +1,7 @@
+---
+okf_version: "0.2"
+---
+
 # Deterministic gates
 
 Platform completion signals are not deterministic verification. Real verification comes from two

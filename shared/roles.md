@@ -1,3 +1,7 @@
+---
+okf_version: "0.2"
+---
+
 # Role contracts
 
 Host facts were checked on 2026-07-29: Claude role definitions use Markdown files with YAML

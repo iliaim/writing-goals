@@ -1,3 +1,7 @@
+---
+okf_version: "0.2"
+---
+
 # Skill and planning quality evaluation
 
 Every skill-related change is evaluated according to the **affected-risk** surface, not a
@@ -39,12 +43,8 @@ fixture set is protected test input; makers do not edit it to change a score.
 ## Offline host parity and hermeticity
 
 `scripts/run-skill-behavioral-eval.sh --host-contract` reads only an explicitly supplied fixture
-root and invokes the supported hosts with this frozen argv:
-
-```text
-claude -p --model claude-fixture-model --max-turns 3 --sandbox read-only
-codex exec --model codex-fixture-model --max-turns 3 --sandbox read-only
-```
+root and invokes each supported host through its frozen fixture contract. The exact host command
+is adapter-owned, not shared policy.
 
 The check is run from a non-source working directory with a new empty `HOME` and `CODEX_HOME`.
 It must not install a skill, read a source checkout through home state, or persist any home state.

@@ -1,3 +1,7 @@
+---
+okf_version: "0.2"
+---
+
 # Security model
 
 `writing-goals` provides a method, lifecycle gates, and a best-effort pre-use policy. It does not
