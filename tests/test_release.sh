@@ -14,6 +14,16 @@ grep -q -- "$required_ci_os" "$ci" || red 'Linux CI matrix route missing'
 grep -q -- 'persist-credentials: false' "$ci" || red 'credential-free checkout missing'
 grep -q -- 'contents: read' "$ci" || red 'read-only CI permissions missing'
 
+# The outer release verifier invokes tests/run.sh inside the detached candidate.
+# Its registered release test uses this narrow child mode to avoid recursively
+# cloning the same candidate; it still proves that child execution stays local.
+if [ "${G13_RELEASE_CHILD:-}" = 1 ]; then
+  [ -z "$(git -C "$REPO_DIR" status --porcelain)" ] || red 'detached child checkout is dirty'
+  pass 'G13_RELEASE_MATRIX_COMPLETE: registered release child remains in the clean detached candidate'
+  finish_tests
+  exit $?
+fi
+
 git -C "$REPO_DIR" diff --quiet --ignore-submodules -- || red 'source worktree is dirty'
 [ -z "$(git -C "$REPO_DIR" status --porcelain)" ] || red 'source status is dirty'
 commit="$(git -C "$REPO_DIR" rev-parse HEAD)" || red 'cannot resolve candidate commit'
@@ -30,14 +40,16 @@ assert_success 'G13_CLEAN_EXACT_CHECKOUT: checkout is detached at the exact cand
 [ -z "$(git -C "$checkout" status --porcelain)" ] || red 'detached checkout is dirty'
 pass 'G13_CLEAN_EXACT_CHECKOUT: commit/tree and worktree are exact and clean'
 
-run_command env HOME="$home" CODEX_HOME="$codex_home" bash "$checkout/tests/test_conformance.sh"
-assert_success 'G13_RELEASE_MATRIX_COMPLETE: detached clean checkout passes conformance with temporary homes'
-assert_not_contains "$(cat "$RUN_OUT" "$RUN_ERR")" "$REPO_DIR|$HOME" 'G13_RELEASE_MATRIX_COMPLETE: detached verification does not expose ambient source/home paths'
+run_command env HOME="$home" CODEX_HOME="$codex_home" G13_RELEASE_CHILD=1 bash "$checkout/tests/run.sh"
+assert_success 'G13_RELEASE_MATRIX_COMPLETE: detached clean checkout passes the actual full suite with temporary homes'
+assert_contains "$(cat "$RUN_OUT")" '^==> test_conformance.sh$' 'G13_RELEASE_MATRIX_COMPLETE: detached suite executes protected conformance'
+assert_contains "$(cat "$RUN_OUT")" '^==> test_release.sh$' 'G13_RELEASE_MATRIX_COMPLETE: detached suite executes registered release oracle'
+assert_not_contains "$(cat "$RUN_OUT" "$RUN_ERR")" "$REPO_DIR|$HOME" 'G13_RELEASE_MATRIX_COMPLETE: detached validation does not expose source or ambient-home paths'
 
 if command -v shellcheck >/dev/null 2>&1; then
-  run_command bash -c 'set --; for f in sync.sh install.sh assets/*.sh scripts/*.sh tests/*.sh; do test -f "$f" && set -- "$@" "$f"; done; shellcheck --exclude=SC2294 "$@" && printf "%s\\n" SHELLCHECK_STATUS=PASSED' bash
-  assert_success 'G13_LINUX_SHELLCHECK_PASSED: available ShellCheck passes the release script surface'
-  assert_file_contains "$RUN_OUT" '^SHELLCHECK_STATUS=PASSED$' 'G13_LINUX_SHELLCHECK_PASSED: local authoritative tool status is explicit'
+  run_command env HOME="$home" CODEX_HOME="$codex_home" bash -c 'cd "$1" || exit 1; set --; for f in sync.sh install.sh assets/*.sh scripts/*.sh tests/*.sh; do test -f "$f" && set -- "$@" "$f"; done; shellcheck --exclude=SC2294 "$@" && printf "%s\\n" SHELLCHECK_STATUS=PASSED' bash "$checkout"
+  assert_success 'G13_LINUX_SHELLCHECK_PASSED: available ShellCheck passes the detached release script surface'
+  assert_file_contains "$RUN_OUT" '^SHELLCHECK_STATUS=PASSED$' 'G13_LINUX_SHELLCHECK_PASSED: detached authoritative tool status is explicit'
 else
   printf '%s\n' 'SHELLCHECK_STATUS=NOT_AVAILABLE'
   pass 'G13_LINUX_SHELLCHECK_PASSED: local unavailable status is non-authoritative; CI must pass'
