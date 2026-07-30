@@ -65,15 +65,17 @@ anti-patterns.
 
 ## Quick start
 
-The current distribution is a source checkout with a live-symlink installer:
+Build a portable bundle from a source checkout, then run its local copy installer:
 
 ```bash
 git clone https://github.com/iliaim/writing-goals.git
 cd writing-goals
 
-./sync.sh codex
+mkdir -p dist
+bash scripts/build-bundles.sh dist/writing-goals
+bash dist/writing-goals/install.sh codex
 # or
-./sync.sh claude
+bash dist/writing-goals/install.sh claude
 ```
 
 In Codex:
@@ -149,38 +151,31 @@ documentation and are covered by repository documentation contracts.
 
 No language package manager is required.
 
-## Development install
+## Build and install
 
-The installer creates **live symlinks** back to this checkout. Edits in this repository
-immediately affect the installed skill:
+The bundle builder creates a deterministic, self-contained, symlink-free copy. Build it into an
+otherwise absent output directory, then run the installer shipped inside that bundle:
 
 ```bash
-./sync.sh claude
-./sync.sh codex
-# or preflight and install both:
-./sync.sh all
+mkdir -p dist
+bash scripts/build-bundles.sh dist/writing-goals
+bash dist/writing-goals/install.sh claude
+bash dist/writing-goals/install.sh codex
+# or preflight and install both transactionally:
+bash dist/writing-goals/install.sh all
 ```
 
 Claude is installed at `~/.claude/skills/writing-goals`; Codex at
 `${CODEX_HOME:-$HOME/.codex}/skills/writing-goals`. A normal install refuses an occupied target
-unless it is the complete canonical layout previously created from this checkout. `all`
-preflights both targets before changing either one and restores their prior states if a handled
-installation command fails.
+unless it is an identical, symlink-free copy from that bundle; it never provides a force-overwrite
+mode. `all` preflights every target before changing any of them and restores prior states if a
+handled installation command fails.
 
 This is compensated rollback, not crash-safe storage: `SIGKILL`, power loss, and unsupported
 concurrent changes remain outside the installer contract.
 
-If you have inspected the exact destination and deliberately want to replace it:
-
-```bash
-./sync.sh --force claude
-./sync.sh --force codex
-```
-
-`--force` removes only the selected `writing-goals` target, then recreates its links. It can
-delete user content inside that exact target, so back it up first. It does not replace parent
-skill directories. For `--force all`, both originals are retained until both replacement layouts
-succeed and are restored after a handled installation failure.
+To upgrade, build a new bundle and rerun its installer. If the installed target differs, inspect
+and replace that exact target manually before installing; do not remove a parent skills directory.
 
 ## Deterministic gate
 
@@ -297,7 +292,8 @@ workspace, restricted egress, explicit budgets, protected gate state, and a kill
 | [`codex/SKILL.md`](codex/SKILL.md) | Codex adapter and metadata |
 | [`assets/`](assets/) | Gate adapters, pre-use policy, and goal template |
 | [`tests/`](tests/) | Portable installer, gate, policy, and documentation contracts |
-| [`sync.sh`](sync.sh) | Non-destructive live-symlink installer |
+| [`scripts/build-bundles.sh`](scripts/build-bundles.sh) | Deterministic portable bundle builder |
+| [`install.sh`](install.sh) | Bundle-local copy installer |
 
 ## Verify this checkout
 

@@ -27,8 +27,8 @@ mechanics.
 | Decision | Implemented choice | Reason |
 |---|---|---|
 | Source layout | Canonical `shared/` method with thin adapters | Avoids divergent Claude/Codex policy |
-| Installation | Live symlinks from this checkout | One development source of truth |
-| Collision handling | Refuse by default; `--force` replaces only the selected target | Preserves user-owned skill content |
+| Installation | Deterministic, symlink-free bundles installed as local copies | Keeps installed skills independent of the source checkout |
+| Collision handling | Refuse non-identical occupied targets; no force-overwrite mode | Preserves user-owned skill content |
 | Verification | Trusted command Stop hook with explicit cap and surface | Gives the maker an independent, bounded checker |
 | Gate state | Session-keyed, mode-0600 state and failure log | Avoids model-facing command output and cross-session counters |
 | Surface protection | Read-only-to-maker surface before work, then a session-keyed digest | A first untrusted digest or writable state is not protection |
@@ -46,8 +46,8 @@ mechanics.
 | Surface | Claude Code | Codex | Repository contract |
 |---|---|---|---|
 | Skill invocation | `/writing-goals` | `$writing-goals`, `/skills`, or description match | Adapter-specific |
-| Install target | `~/.claude/skills/writing-goals` | `${CODEX_HOME:-$HOME/.codex}/skills/writing-goals` | `sync.sh all` preflights both and compensates handled failures |
-| Installed shape | Directory containing three canonical links | Symlink to the self-contained `codex/` directory | Re-running the same layout is idempotent |
+| Install target | `~/.claude/skills/writing-goals` | `${CODEX_HOME:-$HOME/.codex}/skills/writing-goals` | Bundle-local `install.sh all` preflights both and compensates handled failures |
+| Installed shape | Symlink-free copy tree | Symlink-free copy tree plus namespaced role files | Re-running an identical bundle layout is idempotent |
 | Project hook file | `.claude/settings.json` | `.codex/hooks.json` or platform-supported config | User reviews and trusts hook source |
 | Repository root | `CLAUDE_PROJECT_DIR` | Hook input `cwd` | Missing or invalid root fails closed |
 | Retry signal | `{"decision":"block","reason":"..."}` | Same | Clean exit with no JSON is green |

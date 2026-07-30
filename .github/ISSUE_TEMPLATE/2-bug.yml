@@ -1,5 +1,5 @@
 name: Gate or installer bug
-description: Report reproducible behavior in sync.sh, gates, deny-list, or contract tests.
+description: Report reproducible behavior in the bundle/copy installer, gates, deny-list, or contract tests.
 title: "[Bug]: "
 labels: []
 body:
@@ -20,7 +20,7 @@ body:
     attributes:
       label: Component
       options:
-        - sync.sh installer
+        - bundle/copy installer
         - Claude gate
         - Codex gate
         - deny-list
