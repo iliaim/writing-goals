@@ -9,6 +9,10 @@ shim_dir="$REPO_DIR/tests/host-shims"
 missing() { printf '%s\n' 'FAIL: G10_HOST_CONTRACT_MISSING' >&2; exit 1; }
 
 [ -f "$runner" ] && [ -x "$runner" ] && [ -f "$fixtures/host-contract.tsv" ] && [ -x "$shim_dir/claude" ] && [ -x "$shim_dir/codex" ] || missing
+# The runner resolves its protected shim directory physically.  Canonicalize
+# this test's PATH and expected values too, because macOS exposes /var through
+# the /private/var symlink in ordinary temporary-directory paths.
+shim_dir="$(CDPATH= cd -- "$shim_dir" && pwd -P)" || missing
 
 home="$TEST_TMP/fresh-home"
 log="$TEST_TMP/host.log"
