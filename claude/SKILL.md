@@ -17,7 +17,9 @@ references as the task requires; this adapter adds no policy.
 - `/goal` requires a trusted workspace and the hooks system. Managed `disableAllHooks` makes it
   unavailable.
 - Project hooks live in `.claude/settings.json`. Review hook source before trusting it; unattended
-  permission modes do not turn a hook into a security boundary.
+  permission modes do not turn a hook into containment. Stop and PreToolUse hooks are cooperative
+  backstops, not a security boundary. Run unattended work in an OS-level sandbox (for example,
+  a `sandbox-exec` profile where available) with only the intended writable source paths.
 
 ## Current Claude platform facts
 

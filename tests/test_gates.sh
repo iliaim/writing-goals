@@ -49,11 +49,37 @@ input_for() {
 }
 
 for platform in claude codex; do
+  script="$REPO_DIR/assets/gate.$platform.sh"
+  assert_file_contains "$script" 'validate_stop_payload' "G08_STOP_GATE_MISSING: $platform validates its Stop payload before running a gate"
   root="$TEST_TMP/root-$platform"
   state="$TEST_TMP/state-$platform"
   mkdir -p "$root" "$state"
   printf 'surface\n' > "$root/surface.txt"
   input="$(input_for "$platform" "$root" "session-$platform")"
+
+  malformed_marker="$TEST_TMP/$platform-malformed-command-ran"
+  malformed_command="printf ran > '$malformed_marker'; true"
+  if [ "$platform" = codex ]; then
+    malformed_input='{"cwd":7,"session_id":false,"transcript_path":[],"stop_hook_active":"false"}'
+  else
+    malformed_input='{"session_id":false,"transcript_path":[],"stop_hook_active":"false"}'
+  fi
+  gate_once "$platform" "$malformed_input" "$state" "$malformed_command" 8 'surface.txt' "$root"
+  assert_success "$platform malformed Stop payload returns a host-valid terminal response"
+  assert_terminal_json "$RUN_OUT" "$platform malformed Stop payload fails closed"
+  assert_path_absent "$malformed_marker" "$platform malformed Stop payload never executes GATE_CMD"
+
+  if [ "$platform" = codex ]; then
+    null_state="$TEST_TMP/null-transcript-state"
+    null_marker="$TEST_TMP/codex-null-transcript-gate-ran"
+    mkdir -p "$null_state"
+    null_input="$(jq -cn --arg cwd "$root" --arg s 'codex-null-transcript' '{cwd:$cwd,session_id:$s,transcript_path:null,stop_hook_active:false}')"
+    null_command="printf GATE_CMD > '$null_marker'"
+    gate_once codex "$null_input" "$null_state" "$null_command" 8 'surface.txt' "$root"
+    assert_success 'G08_STOP_BEHAVIOR: Codex accepts a documented null transcript_path'
+    assert_empty_file "$RUN_OUT" 'G08_STOP_BEHAVIOR: null transcript_path green gate emits no model-visible stdout'
+    assert_file_contains "$null_marker" '^GATE_CMD$' 'G08_STOP_BEHAVIOR: null transcript_path executes GATE_CMD'
+  fi
 
   gate_once "$platform" "$input" "$state" '' 8 'surface.txt' "$root"
   assert_success "$platform rejects missing GATE_CMD without a hook crash"

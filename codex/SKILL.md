@@ -17,16 +17,18 @@ references as the task requires; this adapter adds no policy.
 - Project hooks live in `.codex/hooks.json` or `.codex/config.toml`. Non-managed command hooks
   must be reviewed and trusted; `/hooks` shows their sources and trust state. A changed hook hash
   requires review again.
+- Stop and PreToolUse hooks are cooperative backstops, not a security boundary or containment.
+  Run unattended work in an OS-level sandbox (for example, a `sandbox-exec` profile where
+  available) with only the intended writable source paths.
 
 ## Current Codex platform facts
 
 - Stop hooks receive JSON on stdin and can run deterministic verification. A clean exit 0 with no
   block allows the turn to stop; the repository adapter is `assets/gate.codex.sh`.
-- `PreToolUse` covers shell and unified execution as `Bash`, file edits through `apply_patch`,
-  MCP tools, and most other local function tools. Hosted tools such as `WebSearch` are excluded;
-  `write_stdin` does not get a second `PreToolUse`, and specialized paths may opt out.
-- Matchers may use `Bash`, `apply_patch` (also `Edit` or `Write`), an MCP tool name, or another
-  local function tool name. A supported call can be denied using `permissionDecision:"deny"` or
-  exit 2 with the reason on stderr.
+- This adapter validates only `Bash` (including the documented unified execution payload) and
+  `apply_patch`; do not infer coverage for any other tool or payload shape. A supported call can
+  be denied using `permissionDecision:"deny"` or exit 2 with the reason on stderr.
+- Bind one native Codex goal to the complete objective/run. A child handoff can never complete the parent;
+  native completion is rejected while the parent rollup is incomplete.
 
 Source: [Codex hooks documentation](https://learn.chatgpt.com/docs/hooks).

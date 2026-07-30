@@ -4,6 +4,8 @@ set -u
 
 deny_hook="$REPO_DIR/assets/deny-list.sh"
 
+assert_file_contains "$deny_hook" 'validate_payload_contract' 'G08_PAYLOAD_POLICY_MISSING: deny hook validates supported payload types before parsing'
+
 run_hook() {
   local root="$1" tool="$2" command="$3" cwd="${4:-$1}" payload
   payload="$(jq -cn --arg tool "$tool" --arg command "$command" --arg cwd "$cwd" '{tool_name:$tool,tool_input:{command:$command},cwd:$cwd}')"
@@ -30,6 +32,14 @@ printf 'outside\n' > "$outside/existing.txt"
 ln -s "$outside/existing.txt" "$root/link-file"
 ln -s "$outside/missing.txt" "$root/link-dangling"
 ln -s "$outside/dir" "$root/link-dir"
+
+for malformed_payload in \
+  '{"tool_name":"Bash","tool_input":{},"cwd":"/tmp"}' \
+  '{"tool_name":"Bash","tool_input":{"command":false},"cwd":"/tmp"}' \
+  '{"tool_name":"apply_patch","tool_input":{"command":7},"cwd":"/tmp"}'; do
+  run_input "$malformed_payload" env HOME="$TEST_TMP/home" CLAUDE_PROJECT_DIR="$root" bash "$deny_hook"
+  assert_denied 'G08_MALFORMED_FAILS_CLOSED: malformed supported payload is denied'
+done
 
 # A valid payload cwd is authoritative over a bad environment root.
 payload="$(jq -cn --arg command 'touch payload-root.txt' --arg cwd "$root" '{tool_name:"Bash",tool_input:{command:$command},cwd:$cwd}')"
