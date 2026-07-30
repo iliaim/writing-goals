@@ -40,5 +40,9 @@ policy into prompts. Approval remains a bounded human decision. A role capsule a
 receipt are rendered on demand from a plan manifest and explicit inputs; they are derived,
 ephemeral outputs, not plan, dispatch, selection, or approval state.
 
+An activatable successor revision is a complete, self-contained canonical plan: it binds every retained goal and the complete frozen execution order through its own manifest. A narrow correction
+to an already completed revision is untrusted evidence only; it must not claim activation or
+terminal/release authority. This prevents a partial patch from silently becoming a second plan.
+
 Do not create a new planning spec, ticket, map, or hierarchy. Heuristics are not state. Scope
 narrowing requires approval; return to the user when it changes approved intent.

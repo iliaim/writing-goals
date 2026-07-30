@@ -24,6 +24,8 @@ assert_file_contains "$recipe" 'docs_config.*(red|characterization).*green|docs_
 assert_file_contains "$recipe" 'refactor.*characterization.*green|refactor.*green' 'G14_TASK_CLASS_ROUTING: refactor has a characterization route'
 assert_file_contains "$recipe" 'research_design.*(source|challenge)' 'G14_TASK_CLASS_ROUTING: research design has sourced challenge'
 assert_file_contains "$recipe" 'research_design.*(does not|no).*red|no.*red.*research_design' 'G14_TASK_CLASS_ROUTING: research never invents red/green work'
+assert_file_contains "$recipe" 'activatable successor.*complete, self-contained.*every.*retained goal.*complete frozen execution order' 'G14_SUCCESSOR_AUTHORITY_COMPLETE: an activatable successor must bind the complete plan'
+assert_file_contains "$recipe" 'narrow correction.*untrusted evidence only.*not claim activation.*terminal/release authority' 'G14_PARTIAL_CORRECTION_NONAUTHORITATIVE: a partial correction cannot become execution authority'
 assert_file_contains "$linter" '(not|never).*(semantic|prose)|(semantic|prose).*(not|never)' 'G14_NO_AUTOMATED_SEMANTIC_APPROVAL: linter is structural only'
 
 run_lint valid
