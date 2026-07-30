@@ -67,6 +67,9 @@ Parallel branches require disjoint write artifacts, no semantic or runtime depen
 worktrees, sufficient review capacity, and an integration order. Disjoint artifacts are necessary
 but insufficient. See `shared/chaining.md`.
 
+For a proposed multi-goal slice, use `shared/planning-recipe.md` as the canonical structural
+recipe. It is an approved-plan record, not a scheduler or persistent mutable task state.
+
 ## 6. Apply autonomy by blast radius
 
 Use the action classes in `shared/autonomy.md`. Read-only and reversible scoped actions may run

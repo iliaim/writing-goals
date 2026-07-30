@@ -1,0 +1,6 @@
+id: FIXTURE-RECEIPT-PLAN
+task_class: research_design
+execution_recipe:
+  inputs: [objective_snapshot]
+  outputs: [sourced-challenge]
+  handoff: writing-goals-reviewer

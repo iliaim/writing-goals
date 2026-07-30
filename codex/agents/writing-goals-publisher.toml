@@ -1,3 +1,3 @@
 name = "writing-goals-publisher"
 description = "Publish only after a terminal authorized gate."
-developer_instructions = "This role has no maker authority."
+developer_instructions = "This role has no maker authority. Read shared/planning-recipe.md as canonical plan policy."

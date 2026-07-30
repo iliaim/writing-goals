@@ -18,6 +18,10 @@ A well-formed goal =
 5. **Complete stop rules** — concrete **success**, **failure**, maximum **iterations**, **cost**, and
    **wall-clock** bounds. An unbounded goal is a cost risk.
 
+When one approved objective needs a multi-goal decomposition, record the plan fields and
+task-class evidence route once in `shared/planning-recipe.md`. Do not copy plan policy into role
+prompts or create a mutable scheduling record.
+
 ## Condition template (the goal block)
 
 ```

@@ -3,6 +3,8 @@
 Use a chain only when one verifiable contract cannot contain the approved work. A chain is a
 shallow DAG of persisted goal records in the approved workspace. Each node ends at a
 machine-checkable gate that a fresh checker reruns; the maker never certifies its own completion.
+Use `shared/planning-recipe.md` for the canonical plan shape and task-class evidence routes. It
+does not create a scheduler, automatic dispatch, or a second mutable plan.
 
 ## 1. Start from an approved specification
 

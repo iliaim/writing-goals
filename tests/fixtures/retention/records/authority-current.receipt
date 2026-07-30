@@ -1,0 +1,5 @@
+identity=authority-current
+plan=p01
+recorded_at=2025-02-01T00:00:00Z
+referenced_by=
+payload=current authority that references old-referenced.receipt

@@ -1,6 +1,7 @@
 ---
 # ── required ──────────────────────────────────────────────────────────────
 id: <stable-slug>              # unique node key; other goals reference this in depends_on. Don't rename once set.
+task_class: <behavioral_code|docs_config|refactor|research_design>  # route evidence via shared/planning-recipe.md
 title: <one-line human name>   # short imperative summary, e.g. "Persist sessions in Redis"
 observable_outcome: "<one complete, externally checkable result>"
 status: todo                   # todo | in_progress | blocked | in_review | done | cancelled  (drives run-loop + resume)

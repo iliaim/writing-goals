@@ -1,0 +1,5 @@
+identity=run-alpha
+plan=p01
+recorded_at=2024-01-01T00:00:00Z
+referenced_by=authority-current.receipt
+payload=expired but protected authority dependency

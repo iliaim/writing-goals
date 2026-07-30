@@ -1,0 +1,7 @@
+id: FIXTURE-PLAN
+task_class: magic_implementation
+requirements: [REQ-02]
+objective_acceptance: [OBJ-01]
+execution_recipe: {inputs: [objective_snapshot], outputs: [updated-policy], maker_paths: [shared/example.md], oracle_paths: [tests/example.sh], evidence: [{order: 1, argv: [bash, tests/example.sh], expected_exit: 0}], handoff: writing-goals-verifier, fan_in_owner: writing-goals-reviewer, risks: [risk], stop_conditions: [stop]}
+dag: [{id: author, depends_on: []}]
+workflow: [discover, author, lint, challenge, freeze]
