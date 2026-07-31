@@ -39,18 +39,28 @@ done
 
 ledger_header=$'cohort_id\tbase_commit\tprofile_sha256\tprompt_sha256\tevaluator_sha256\tadapter_sha256\tscenario_id\tarm\trepeat\trun_id\tplanned_order\ttimeout_seconds\toperator_action'
 validate_ledger() {
+  # Kept byte-identical to the aggregator's copy: both sides must accept exactly
+  # the same ledgers, and tests/test_benchmark_harness.sh asserts that agreement.
   awk -F '\t' -v expected="$ledger_header" '
-    NR == 1 { if ($0 != expected) { print "invalid ledger header" > "/dev/stderr"; exit 1 }; next }
-    NF != 13 { print "invalid ledger row field count at line " NR > "/dev/stderr"; exit 1 }
-    $1 == "" || $2 == "" || $3 == "" || $4 == "" || $5 == "" || $6 == "" || $7 == "" || $8 == "" || $9 == "" || $10 == "" || $11 == "" || $12 == "" || $13 == "" { print "blank ledger field at line " NR > "/dev/stderr"; exit 1 }
-    $8 !~ /^(control|treatment)$/ { print "invalid ledger arm at line " NR > "/dev/stderr"; exit 1 }
-    $9 !~ /^[1-9][0-9]*$/ || $11 !~ /^[1-9][0-9]*$/ || $11 > 12 || $12 !~ /^[1-9][0-9]*$/ || $12 > 3600 { print "invalid ledger numeric field at line " NR > "/dev/stderr"; exit 1 }
-    $13 !~ /^(none|operator-aborted|environment-repaired)$/ { print "invalid ledger operator action at line " NR > "/dev/stderr"; exit 1 }
-    seen_run[$10]++ { print "duplicate ledger run_id: " $10 > "/dev/stderr"; exit 1 }
-    seen_order[$11]++ { print "duplicate ledger planned_order: " $11 > "/dev/stderr"; exit 1 }
+    function reject(reason) { print reason > "/dev/stderr"; aborted = 1; exit 1 }
+    NR == 1 { if ($0 != expected) reject("invalid ledger header"); next }
+    NF != 13 { reject("invalid ledger row field count at line " NR) }
+    $1 == "" || $2 == "" || $3 == "" || $4 == "" || $5 == "" || $6 == "" || $7 == "" || $8 == "" || $9 == "" || $10 == "" || $11 == "" || $12 == "" || $13 == "" { reject("blank ledger field at line " NR) }
+    $8 !~ /^(control|treatment)$/ { reject("invalid ledger arm at line " NR) }
+    $9 !~ /^[1-9][0-9]*$/ || $11 !~ /^[1-9][0-9]*$/ || $11 > 12 || $12 !~ /^[1-9][0-9]*$/ || $12 > 3600 { reject("invalid ledger numeric field at line " NR) }
+    $13 !~ /^(none|operator-aborted|environment-repaired)$/ { reject("invalid ledger operator action at line " NR) }
+    cohort != "" && cohort != $1 { reject("ledger has multiple cohort_ids") }
+    ledger_base != "" && ledger_base != $2 { reject("ledger must declare a single base_commit") }
+    ledger_adapter != "" && ledger_adapter != $6 { reject("ledger must declare a single adapter_sha256") }
+    scenario_prompt[$7] != "" && scenario_prompt[$7] != $4 { reject("ledger must declare a single prompt_sha256 per scenario_id") }
+    scenario_evaluator[$7] != "" && scenario_evaluator[$7] != $5 { reject("ledger must declare a single evaluator_sha256 per scenario_id") }
+    { cohort = $1; ledger_base = $2; ledger_adapter = $6; scenario_prompt[$7] = $4; scenario_evaluator[$7] = $5 }
+    seen_run[$10]++ { reject("duplicate ledger run_id: " $10) }
+    seen_order[$11]++ { reject("duplicate ledger planned_order: " $11) }
     END {
-      if (NR != 13) { print "ledger must contain exactly 12 run rows" > "/dev/stderr"; exit 1 }
-      for (order = 1; order <= 12; order++) if (!seen_order[order]) { print "ledger planned_order must be contiguous 1..12" > "/dev/stderr"; exit 1 }
+      if (aborted) exit 1
+      if (NR != 13) reject("ledger must contain exactly 12 run rows")
+      for (order = 1; order <= 12; order++) if (!seen_order[order]) reject("ledger planned_order must be contiguous 1..12")
     }
   ' "$ledger"
 }
@@ -220,6 +230,10 @@ on_signal() {
   trap - HUP INT TERM
   [ -z "$active_watchdog_pid" ] || kill "$active_watchdog_pid" 2>/dev/null || true
   [ -z "$active_child_pid" ] || terminate_process_group "$active_child_pid"
+  # A signal can arrive after a stage child is forked but before its pid is
+  # recorded, so sweep surviving direct children instead of trusting the
+  # recorded pid to be the whole story.
+  command -v pkill >/dev/null 2>&1 && pkill -KILL -P $$ 2>/dev/null || true
   [ -z "$active_watchdog_pid" ] || wait "$active_watchdog_pid" 2>/dev/null || true
   [ -z "$active_child_pid" ] || wait "$active_child_pid" 2>/dev/null || true
   reject_credential_leaks
@@ -299,10 +313,15 @@ if [ "$workflow" = writing-goals ]; then
     set -e
   }
   run_install_with_timeout
+  # The watchdog can see a live child and still lose the race to one that exits
+  # on its own moments later, so a timeout claim only stands when the recorded
+  # status shows the child was actually signalled.
   if [ -f "$run_dir/.setup-timeout" ]; then
     rm -f "$run_dir/.setup-timeout"
-    write_result timed-out "$install_status" setup
-    exit 124
+    if [ "$install_status" -ge 128 ]; then
+      write_result timed-out "$install_status" setup
+      exit 124
+    fi
   fi
   [ "$install_status" -eq 0 ] || setup_failed "$install_status" install
 fi
@@ -367,9 +386,11 @@ env HOME="$runtime_home" CODEX_HOME="$runtime_home/.codex" \
 run_agent_with_timeout
 if [ -f "$run_dir/.timeout" ]; then
   rm -f "$run_dir/.timeout"
-  reject_credential_leaks
-  write_result timed-out "$agent_status" agent
-  exit 124
+  if [ "$agent_status" -ge 128 ]; then
+    reject_credential_leaks
+    write_result timed-out "$agent_status" agent
+    exit 124
+  fi
 fi
 if [ "$agent_status" -ne 0 ]; then
   reject_credential_leaks
@@ -419,9 +440,11 @@ run_evaluator_with_timeout
 set -e
 if [ -f "$run_dir/.evaluator-timeout" ]; then
   rm -f "$run_dir/.evaluator-timeout"
-  reject_credential_leaks
-  write_result timed-out "$evaluator_status" evaluator
-  exit 124
+  if [ "$evaluator_status" -ge 128 ]; then
+    reject_credential_leaks
+    write_result timed-out "$evaluator_status" evaluator
+    exit 124
+  fi
 fi
 if [ "$evaluator_status" -ne 0 ]; then
   reject_credential_leaks

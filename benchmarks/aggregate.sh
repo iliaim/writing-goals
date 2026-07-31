@@ -21,19 +21,29 @@ done
 
 ledger_header=$'cohort_id\tbase_commit\tprofile_sha256\tprompt_sha256\tevaluator_sha256\tadapter_sha256\tscenario_id\tarm\trepeat\trun_id\tplanned_order\ttimeout_seconds\toperator_action'
 awk -F '\t' -v expected="$ledger_header" '
-  NR == 1 { if ($0 != expected) { print "invalid ledger header" > "/dev/stderr"; exit 1 }; next }
-  NF != 13 { print "invalid ledger row field count at line " NR > "/dev/stderr"; exit 1 }
-  $1 == "" || $2 == "" || $3 == "" || $4 == "" || $5 == "" || $6 == "" || $7 == "" || $8 == "" || $9 == "" || $10 == "" || $11 == "" || $12 == "" || $13 == "" { print "blank ledger field at line " NR > "/dev/stderr"; exit 1 }
-  $8 !~ /^(control|treatment)$/ { print "invalid ledger arm at line " NR > "/dev/stderr"; exit 1 }
-  $9 !~ /^[1-9][0-9]*$/ || $11 !~ /^[1-9][0-9]*$/ || $11 > 12 || $12 !~ /^[1-9][0-9]*$/ || $12 > 3600 { print "invalid ledger numeric field at line " NR > "/dev/stderr"; exit 1 }
-  $13 !~ /^(none|operator-aborted|environment-repaired)$/ { print "invalid ledger operator action at line " NR > "/dev/stderr"; exit 1 }
-  cohort != "" && cohort != $1 { print "ledger has multiple cohort_ids" > "/dev/stderr"; exit 1 }
-  { cohort = $1 }
-  seen_run[$10]++ { print "duplicate ledger run_id: " $10 > "/dev/stderr"; exit 1 }
-  seen_order[$11]++ { print "duplicate ledger planned_order: " $11 > "/dev/stderr"; exit 1 }
+  function reject(reason) { print reason > "/dev/stderr"; aborted = 1; exit 1 }
+  NR == 1 { if ($0 != expected) reject("invalid ledger header"); next }
+  NF != 13 { reject("invalid ledger row field count at line " NR) }
+  $1 == "" || $2 == "" || $3 == "" || $4 == "" || $5 == "" || $6 == "" || $7 == "" || $8 == "" || $9 == "" || $10 == "" || $11 == "" || $12 == "" || $13 == "" { reject("blank ledger field at line " NR) }
+  $8 !~ /^(control|treatment)$/ { reject("invalid ledger arm at line " NR) }
+  $9 !~ /^[1-9][0-9]*$/ || $11 !~ /^[1-9][0-9]*$/ || $11 > 12 || $12 !~ /^[1-9][0-9]*$/ || $12 > 3600 { reject("invalid ledger numeric field at line " NR) }
+  $13 !~ /^(none|operator-aborted|environment-repaired)$/ { reject("invalid ledger operator action at line " NR) }
+  # A cohort compares one code state through one adapter, so the identities that
+  # are cohort-scoped must agree across all twelve rows, and each scenario must
+  # present the same prompt and evaluator to both arms.  Per-row checks cannot
+  # see this: a ledger split across two commits satisfies every row on its own.
+  cohort != "" && cohort != $1 { reject("ledger has multiple cohort_ids") }
+  ledger_base != "" && ledger_base != $2 { reject("ledger must declare a single base_commit") }
+  ledger_adapter != "" && ledger_adapter != $6 { reject("ledger must declare a single adapter_sha256") }
+  scenario_prompt[$7] != "" && scenario_prompt[$7] != $4 { reject("ledger must declare a single prompt_sha256 per scenario_id") }
+  scenario_evaluator[$7] != "" && scenario_evaluator[$7] != $5 { reject("ledger must declare a single evaluator_sha256 per scenario_id") }
+  { cohort = $1; ledger_base = $2; ledger_adapter = $6; scenario_prompt[$7] = $4; scenario_evaluator[$7] = $5 }
+  seen_run[$10]++ { reject("duplicate ledger run_id: " $10) }
+  seen_order[$11]++ { reject("duplicate ledger planned_order: " $11) }
   END {
-    if (NR != 13) { print "ledger must contain exactly 12 run rows" > "/dev/stderr"; exit 1 }
-    for (order = 1; order <= 12; order++) if (!seen_order[order]) { print "ledger planned_order must be contiguous 1..12" > "/dev/stderr"; exit 1 }
+    if (aborted) exit 1
+    if (NR != 13) reject("ledger must contain exactly 12 run rows")
+    for (order = 1; order <= 12; order++) if (!seen_order[order]) reject("ledger planned_order must be contiguous 1..12")
   }
 ' "$ledger"
 
@@ -118,7 +128,7 @@ while IFS=$'\t' read -r cohort_id base_commit profile_hash prompt_hash evaluator
     *[!0-9]*) printf 'rca trigger: invalid-pair (invalid exit_code for %s)\n' "$run_id" >&2; exit 1 ;;
   esac
   case "$disposition:$stage:$exit_code" in
-    planned:planning:|setup-failed:source-check:|setup-failed:source-check:[0-9]*|setup-failed:worktree:[0-9]*|setup-failed:install:[0-9]*|setup-failed:authentication:[0-9]*|timed-out:setup:|timed-out:setup:[0-9]*|timed-out:agent:[0-9]*|timed-out:evaluator:[0-9]*|signaled:runner:[0-9]*|signaled:setup:[0-9]*|signaled:agent:[0-9]*|signaled:evaluator:[0-9]*|agent-failed:agent:[0-9]*|evaluator-failed:evaluator:[0-9]*|passed:evaluator:0) ;;
+    setup-failed:source-check:|setup-failed:source-check:[0-9]*|setup-failed:worktree:[0-9]*|setup-failed:install:[0-9]*|setup-failed:authentication:[0-9]*|timed-out:setup:|timed-out:setup:[0-9]*|timed-out:agent:[0-9]*|timed-out:evaluator:|timed-out:evaluator:[0-9]*|signaled:runner:[0-9]*|signaled:setup:[0-9]*|signaled:agent:[0-9]*|signaled:evaluator:[0-9]*|agent-failed:agent:[0-9]*|evaluator-failed:evaluator:[0-9]*|passed:evaluator:0) ;;
     *) printf 'rca trigger: invalid-pair (disposition detail mismatch for %s)\n' "$run_id" >&2; exit 1 ;;
   esac
   if [ "$disposition" = passed ]; then [ "$acceptance" = true ] || { printf 'rca trigger: invalid-pair (passed run not accepted for %s)\n' "$run_id" >&2; exit 1; }; else [ "$acceptance" = false ] || { printf 'rca trigger: invalid-pair (non-pass accepted for %s)\n' "$run_id" >&2; exit 1; }; fi

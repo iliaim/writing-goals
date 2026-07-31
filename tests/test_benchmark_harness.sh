@@ -29,6 +29,22 @@ assert_descendant_terminated() {
   fail "$descendant_label"
 }
 
+# The runner and the aggregator keep separate copies of the ledger rules so that
+# each stays runnable on its own.  Assert they accept exactly the same ledgers,
+# so a rule added to one copy but not the other is a test failure rather than a
+# silent split between "runner accepts" and "aggregator rejects".
+assert_ledger_rejected_by_both() {
+  agreement_ledger=$1
+  agreement_pattern=$2
+  agreement_label=$3
+  run_command bash "$aggregator" --ledger "$agreement_ledger" --run-root "$aggregate_root"
+  assert_nonzero "BENCHMARK_LEDGER_AGREEMENT: aggregator rejects $agreement_label"
+  assert_contains "$(cat "$RUN_ERR")" "$agreement_pattern" "BENCHMARK_LEDGER_AGREEMENT: aggregator names $agreement_label"
+  run_command bash "$runner" --ledger "$agreement_ledger" --profile "$profile" --scenario "$scenario" --run-id alpha-control-1 --output-root "$TEST_TMP/agreement-results" --dry-run
+  assert_nonzero "BENCHMARK_LEDGER_AGREEMENT: runner rejects $agreement_label"
+  assert_contains "$(cat "$RUN_ERR")" "$agreement_pattern" "BENCHMARK_LEDGER_AGREEMENT: runner names $agreement_label"
+}
+
 make_ledger() {
   ledger=$1
   source_root=$2
@@ -328,7 +344,7 @@ assert_file_contains "$identity_capture" '^Writing Goals Benchmark <benchmark@wr
 cat > "$fixture_source/install.sh" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
-sleep 5
+sleep 8
 EOF
 chmod +x "$fixture_source/install.sh"
 git -C "$fixture_source" add install.sh
@@ -336,7 +352,7 @@ git -C "$fixture_source" -c user.name='Benchmark Test' -c user.email='benchmark@
 budget_output="$TEST_TMP/budget-results"
 budget_ledger="$TEST_TMP/budget-ledger.tsv"
 budget_pid_file="$TEST_TMP/budget-child.pid"
-make_ledger "$budget_ledger" "$fixture_source" "$fixture_source/benchmarks/profiles/codex-writing-goals.conf" "$fixture_source/benchmarks/scenarios/fixture" budget-smoke treatment 1 1 12
+make_ledger "$budget_ledger" "$fixture_source" "$fixture_source/benchmarks/profiles/codex-writing-goals.conf" "$fixture_source/benchmarks/scenarios/fixture" budget-smoke treatment 1 1 14
 run_command env PATH="$hang_bin:$PATH" HANG_CHILD_PID="$budget_pid_file" bash "$fixture_source/benchmarks/run.sh" --ledger "$budget_ledger" --profile "$fixture_source/benchmarks/profiles/codex-writing-goals.conf" --scenario "$fixture_source/benchmarks/scenarios/fixture" --run-id budget-smoke --output-root "$budget_output" --execute
 assert_nonzero 'BENCHMARK_BUDGET: agent still times out after setup consumed most of the budget'
 assert_file_contains "$budget_output/budget-smoke/result.tsv" $'^stage\tagent$' 'BENCHMARK_BUDGET: remaining budget is charged to the agent stage'
@@ -344,9 +360,9 @@ budget_elapsed="$(awk -F '\t' '$1 == "elapsed_ms" { print $2 }' "$budget_output/
 TEST_COUNT=$((TEST_COUNT + 1))
 
 # Sharing one budget makes the total track the declared timeout rather than the
-# sum of the stages: correct is ~13s (12s budget plus the watchdog's grace),
-# whereas handing the agent a fresh 12s would land near 19s.
-if [ -n "$budget_elapsed" ] && [ "$budget_elapsed" -lt 15000 ]; then
+# sum of the stages: correct is ~14s (the 14s budget plus teardown),
+# whereas handing the agent a fresh 14s after an 8s setup lands near 22s.
+if [ -n "$budget_elapsed" ] && [ "$budget_elapsed" -lt 18000 ]; then
   pass 'BENCHMARK_BUDGET: no stage receives a fresh full timeout budget'
 else
   fail "BENCHMARK_BUDGET: no stage receives a fresh full timeout budget (elapsed_ms=${budget_elapsed:-missing})"
@@ -499,5 +515,35 @@ printf 'disposition\tsignaled\nacceptance\tfalse\nexit_code\t130\nstage\tsetup\n
 run_command bash "$aggregator" --ledger "$signaled_ledger" --run-root "$signaled_root"
 assert_success 'BENCHMARK_AGGREGATE: interrupted-run evidence is valid terminal evidence'
 assert_contains "$(cat "$RUN_OUT")" $'gamma\tcontrol\t1\tsignaled\tfalse\t42\tnone\tpassed\ttrue\tcomparable\tdiscordant-paired-acceptance\tdiscordant' 'BENCHMARK_AGGREGATE: interrupted run is reported as a discordant non-pass'
+
+# The runner records an empty exit code when the shared budget is already spent
+# at the evaluator boundary, so that exact shape must remain aggregatable; the
+# alternative is one late run discarding eleven valid ones.
+boundary_ledger="$TEST_TMP/boundary-ledger.tsv"
+boundary_root="$TEST_TMP/boundary-results"
+make_cohort "$boundary_ledger" "$boundary_root"
+printf 'disposition\ttimed-out\nacceptance\tfalse\nexit_code\t\nstage\tevaluator\nelapsed_ms\t60000\n' > "$boundary_root/beta-treatment-2/result.tsv"
+run_command bash "$aggregator" --ledger "$boundary_ledger" --run-root "$boundary_root"
+assert_success 'BENCHMARK_AGGREGATE: evaluator-boundary timeout without an exit code is valid terminal evidence'
+assert_contains "$(cat "$RUN_OUT")" $'beta\ttreatment\t2\ttimed-out\tfalse\t60000' 'BENCHMARK_AGGREGATE: evaluator-boundary timeout is reported as a non-pass'
+
+# A cohort compares one code state: identities that are cohort-scoped must hold
+# across all twelve rows.  Per-row checks cannot see a ledger split across two
+# commits, because each row still agrees with its own evidence.
+base_drift_ledger="$TEST_TMP/base-drift-ledger.tsv"
+awk -F '\t' 'BEGIN { OFS = "\t" } NR > 1 && $8 == "treatment" { $2 = "othercommit" } { print }' "$aggregate_ledger" > "$base_drift_ledger"
+assert_ledger_rejected_by_both "$base_drift_ledger" 'single base_commit' 'a cohort split across two base commits'
+
+adapter_drift_ledger="$TEST_TMP/adapter-drift-ledger.tsv"
+awk -F '\t' 'BEGIN { OFS = "\t" } $10 == "beta-control-1" { $6 = "otheradapter" } { print }' "$aggregate_ledger" > "$adapter_drift_ledger"
+assert_ledger_rejected_by_both "$adapter_drift_ledger" 'single adapter_sha256' 'a cohort measured through two adapters'
+
+prompt_drift_ledger="$TEST_TMP/prompt-drift-ledger.tsv"
+awk -F '\t' 'BEGIN { OFS = "\t" } $10 == "alpha-treatment-1" { $4 = "otherprompt" } { print }' "$aggregate_ledger" > "$prompt_drift_ledger"
+assert_ledger_rejected_by_both "$prompt_drift_ledger" 'single prompt_sha256 per scenario_id' 'a scenario presenting two prompts'
+
+evaluator_drift_ledger="$TEST_TMP/evaluator-drift-ledger.tsv"
+awk -F '\t' 'BEGIN { OFS = "\t" } $10 == "alpha-treatment-2" { $5 = "otherevaluator" } { print }' "$aggregate_ledger" > "$evaluator_drift_ledger"
+assert_ledger_rejected_by_both "$evaluator_drift_ledger" 'single evaluator_sha256 per scenario_id' 'a scenario graded by two evaluators'
 
 finish_tests
