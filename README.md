@@ -30,7 +30,6 @@ Two roles, one pre-written check, and stop rules that are decided before impleme
 flowchart TD
     A(["Intent"]) --> B["1 · Investigate<br/>real commands, tests, CI, working tree"]
     B --> C["2 · Write the goal contract<br/>outcome · scope · evidence · stop rules"]
-    C --> D
 
     subgraph maker ["MAKER — may change code"]
         D["3 · Implement one slice"]
@@ -40,11 +39,14 @@ flowchart TD
         E{"4 · Rerun the exact<br/>acceptance command"}
     end
 
+    C --> D
     D --> E
     E -->|green| F(["Complete<br/>raw output and exit code retained"])
     E -->|"red, limits remain"| D
     E -->|"invalid state, or a<br/>stop rule is reached"| G(["Needs human"])
 
+    style maker stroke:#6366f1,stroke-width:2px
+    style checker stroke:#f59e0b,stroke-width:2px
     classDef entry fill:#f1f5f9,stroke:#94a3b8,color:#0f172a
     classDef step fill:#eef2ff,stroke:#818cf8,color:#312e81
     classDef check fill:#fef3c7,stroke:#f59e0b,color:#78350f
