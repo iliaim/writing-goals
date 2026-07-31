@@ -312,11 +312,14 @@ bash benchmarks/run.sh \
 ```
 
 `--execute` creates a retained local benchmark worktree beneath `.archive/benchmarks/` and invokes
-`codex exec` with the profile's declared model and sandbox. It requires a clean source checkout.
-By default it uses `workspace-write`; dangerous Codex bypass mode is refused unless a caller in an
-externally sandboxed environment explicitly attests with `WG_EXTERNAL_SANDBOX=1`. The runner cannot
-verify that attestation, and a worktree alone is not a security boundary. Credentials are never stored in profiles or results; a caller may supply a regular
-`WG_CODEX_AUTH_SOURCE` file to seed the temporary Codex home for an authorized run.
+`codex exec` with the profile's declared model. It requires a clean source checkout. Runs are
+unattended (`approval_policy=never`) but fixed to Codex's `workspace-write` sandbox: the harness
+does not expose a bypass or full-access option. A worktree is not a security boundary, so use an
+OS-level sandbox for stronger containment. Credentials are never retained in benchmark evidence; a
+caller may supply a regular `WG_CODEX_AUTH_SOURCE` file, which is copied only to an ephemeral Codex
+home and deleted when the run ends. Sensitive values from that JSON file are checked against the
+retained logs and worktree; any match discards the entire run rather than retaining secret-bearing
+evidence.
 
 ## Documentation
 

@@ -14,7 +14,7 @@ that release.
 
 ### Added
 
-- A local, profile-driven Codex benchmark harness with retained worktrees, isolated temporary homes,
+- A local, profile-driven Codex benchmark harness with retained worktrees, ephemeral credential homes,
   JSON evidence, and scenario evaluators.
 - Explicit local plugin refresh with source verification and timestamped backups.
 - Public quick-start, worked-example, and security-model guides.

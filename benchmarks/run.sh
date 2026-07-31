@@ -37,8 +37,6 @@ done
 host=
 model=
 workflow=
-sandbox=
-permission=
 while IFS= read -r line || [ -n "$line" ]; do
   case "$line" in ''|'#'*) continue ;; esac
   key=${line%%=*}
@@ -48,33 +46,32 @@ while IFS= read -r line || [ -n "$line" ]; do
     host) [ -z "$host" ] || exit 2; host=$value ;;
     model) [ -z "$model" ] || exit 2; model=$value ;;
     workflow) [ -z "$workflow" ] || exit 2; workflow=$value ;;
-    sandbox) [ -z "$sandbox" ] || exit 2; sandbox=$value ;;
-    permission) [ -z "$permission" ] || exit 2; permission=$value ;;
     *) printf 'unknown profile key: %s\n' "$key" >&2; exit 2 ;;
   esac
 done < "$profile"
 
 case "$host" in codex) ;; *) printf 'unsupported host: %s\n' "$host" >&2; exit 2 ;; esac
 case "$workflow" in control|writing-goals) ;; *) printf 'unsupported workflow: %s\n' "$workflow" >&2; exit 2 ;; esac
-case "$sandbox" in read-only|workspace-write|danger-full-access) ;; *) printf 'invalid sandbox: %s\n' "$sandbox" >&2; exit 2 ;; esac
-case "$permission" in standard|dangerous) ;; *) printf 'invalid permission: %s\n' "$permission" >&2; exit 2 ;; esac
 [ -n "$model" ] || { printf '%s\n' 'profile model is required' >&2; exit 2; }
-if [ "$permission" = dangerous ] && [ "${WG_EXTERNAL_SANDBOX:-}" != 1 ]; then
-  printf '%s\n' 'dangerous permission requires WG_EXTERNAL_SANDBOX=1; a worktree is not a security boundary' >&2
-  exit 2
-fi
+
+# Benchmarks run without interactive approvals but never opt into a bypass or broader sandbox.
+approval_policy=never
+sandbox=workspace-write
 
 mkdir -p "$output_root"
 output_root="$(CDPATH= cd -- "$output_root" && pwd -P)"
 run_dir="$output_root/$run_id"
 [ ! -e "$run_dir" ] && [ ! -L "$run_dir" ] || { printf 'run directory exists: %s\n' "$run_dir" >&2; exit 2; }
-mkdir -p "$run_dir/home" "$run_dir/logs"
+mkdir -p "$run_dir/logs"
 worktree="$run_dir/worktree"
 manifest="$run_dir/manifest.tsv"
 result="$run_dir/result.tsv"
 prompt_hash="$(shasum -a 256 "$scenario/prompt.txt" | awk '{print $1}')"
 profile_hash="$(shasum -a 256 "$profile" | awk '{print $1}')"
+evaluator_hash="$(shasum -a 256 "$scenario/evaluate.sh" | awk '{print $1}')"
 base_commit="$(git -C "$root" rev-parse HEAD)"
+cp "$scenario/evaluate.sh" "$run_dir/evaluator.sh"
+chmod 700 "$run_dir/evaluator.sh"
 
 write_manifest() {
   {
@@ -84,9 +81,12 @@ write_manifest() {
     printf 'model\t%s\n' "$model"
     printf 'workflow\t%s\n' "$workflow"
     printf 'sandbox\t%s\n' "$sandbox"
-    printf 'permission\t%s\n' "$permission"
+    printf 'approval_policy\t%s\n' "$approval_policy"
     printf 'profile_sha256\t%s\n' "$profile_hash"
     printf 'prompt_sha256\t%s\n' "$prompt_hash"
+    printf 'evaluator_artifact\t%s\n' 'evaluator.sh'
+    printf 'evaluator_sha256\t%s\n' "$evaluator_hash"
+    printf 'runtime_home\t%s\n' 'ephemeral'
     printf 'scenario\t%s\n' "$scenario"
     printf 'worktree\t%s\n' "$worktree"
   } > "$manifest"
@@ -111,38 +111,68 @@ git -C "$root" diff --quiet --ignore-submodules -- && [ -z "$(git -C "$root" sta
 }
 git -C "$root" worktree add -b "benchmark/$run_id" "$worktree" "$base_commit"
 
+runtime_home="$(mktemp -d "${TMPDIR:-/tmp}/writing-goals-benchmark-home.XXXXXX")"
+cleanup_runtime() { rm -rf -- "$runtime_home"; }
+trap cleanup_runtime EXIT HUP INT TERM
+credential_values="$runtime_home/credential-values"
+
 if [ "$workflow" = writing-goals ]; then
-  CODEX_HOME="$run_dir/home/.codex" bash "$worktree/install.sh" codex
+  HOME="$runtime_home" CODEX_HOME="$runtime_home/.codex" bash "$worktree/install.sh" codex
 fi
 if [ -n "${WG_CODEX_AUTH_SOURCE:-}" ]; then
   [ -f "$WG_CODEX_AUTH_SOURCE" ] && [ ! -L "$WG_CODEX_AUTH_SOURCE" ] || {
     printf '%s\n' 'WG_CODEX_AUTH_SOURCE must be a regular authentication file' >&2
     exit 2
   }
-  mkdir -p "$run_dir/home/.codex"
-  cp "$WG_CODEX_AUTH_SOURCE" "$run_dir/home/.codex/auth.json"
-  chmod 600 "$run_dir/home/.codex/auth.json"
+  jq -er . "$WG_CODEX_AUTH_SOURCE" >/dev/null || {
+    printf '%s\n' 'WG_CODEX_AUTH_SOURCE must contain valid JSON' >&2
+    exit 2
+  }
+  jq -r 'paths(strings) as $path | ($path | map(tostring) | join(".") | ascii_downcase) as $key | select($key | test("token|secret|key|password|credential|auth|session")) | getpath($path) | select(length >= 8)' "$WG_CODEX_AUTH_SOURCE" > "$credential_values"
+  mkdir -p "$runtime_home/.codex"
+  cp "$WG_CODEX_AUTH_SOURCE" "$runtime_home/.codex/auth.json"
+  chmod 600 "$runtime_home/.codex/auth.json"
 fi
+unset WG_CODEX_AUTH_SOURCE
+
+discard_credential_leak() {
+  leaked_path=$1
+  printf 'credential value found in retained benchmark evidence (%s); discarded run\n' "$leaked_path" >&2
+  rm -rf -- "$run_dir"
+  exit 1
+}
+
+reject_credential_leaks() {
+  [ -s "$credential_values" ] || return 0
+  while IFS= read -r credential_value || [ -n "$credential_value" ]; do
+    leaked_path="$(grep -a -r -F -l -- "$credential_value" "$run_dir/logs" "$worktree" || true)"
+    [ -z "$leaked_path" ] || discard_credential_leak "$leaked_path"
+  done < "$credential_values"
+}
 
 set +e
-env HOME="$run_dir/home" CODEX_HOME="$run_dir/home/.codex" \
-  GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/usr/bin/false GH_CONFIG_DIR="$run_dir/home/.config/gh" \
-  bash "$root/benchmarks/adapters/codex.sh" "$worktree" "$model" "$sandbox" "$permission" \
+env HOME="$runtime_home" CODEX_HOME="$runtime_home/.codex" \
+  GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/usr/bin/false GH_CONFIG_DIR="$runtime_home/.config/gh" \
+  bash "$root/benchmarks/adapters/codex.sh" "$worktree" "$model" \
   "$scenario/prompt.txt" "$run_dir/logs/final.md" > "$run_dir/logs/events.jsonl" 2> "$run_dir/logs/stderr.log"
 agent_status=$?
 set -e
 if [ "$agent_status" -ne 0 ]; then
+  reject_credential_leaks
   write_result "agent-failed:$agent_status"
   exit "$agent_status"
 fi
+reject_credential_leaks
 
 set +e
-bash "$scenario/evaluate.sh" "$worktree" > "$run_dir/logs/evaluator.stdout" 2> "$run_dir/logs/evaluator.stderr"
+bash "$run_dir/evaluator.sh" "$worktree" > "$run_dir/logs/evaluator.stdout" 2> "$run_dir/logs/evaluator.stderr"
 evaluator_status=$?
 set -e
 if [ "$evaluator_status" -ne 0 ]; then
+  reject_credential_leaks
   write_result "evaluator-failed:$evaluator_status"
   exit "$evaluator_status"
 fi
+reject_credential_leaks
 write_result passed
 printf '%s\n' 'Benchmark passed; retained worktree and evidence for independent review.'
