@@ -9,6 +9,26 @@ profile="$REPO_DIR/benchmarks/profiles/codex-control.conf"
 scenario="$REPO_DIR/benchmarks/scenarios/refresh-status"
 output="$TEST_TMP/results"
 
+# A watchdog's SIGKILL can land fractionally after the runner exits, so poll for
+# the descendant to disappear instead of sampling once.  A process still alive
+# after the grace period is a genuine leak, not a scheduling artefact.
+assert_descendant_terminated() {
+  descendant_pid_file=$1
+  descendant_label=$2
+  descendant_waited=0
+  TEST_COUNT=$((TEST_COUNT + 1))
+  while [ "$descendant_waited" -lt 50 ]; do
+    descendant_pid="$(cat "$descendant_pid_file" 2>/dev/null || true)"
+    if [ -n "$descendant_pid" ] && { ! kill -0 "$descendant_pid" 2>/dev/null || ps -o stat= -p "$descendant_pid" 2>/dev/null | grep -Eq '^[[:space:]]*[Zz]'; }; then
+      pass "$descendant_label"
+      return 0
+    fi
+    sleep 0.1
+    descendant_waited=$((descendant_waited + 1))
+  done
+  fail "$descendant_label"
+}
+
 make_ledger() {
   ledger=$1
   source_root=$2
@@ -18,7 +38,10 @@ make_ledger() {
   ledger_arm=${6:-control}
   ledger_repeat=${7:-1}
   ledger_order=${8:-1}
-  ledger_timeout=${9:-5}
+  # One declared timeout covers git setup, agent, and evaluator, so fixtures that
+  # are not exercising a timeout need enough budget to absorb setup jitter on a
+  # loaded machine.  Tests that do exercise timeouts pass an explicit short value.
+  ledger_timeout=${9:-60}
   printf '%s\n' $'cohort_id\tbase_commit\tprofile_sha256\tprompt_sha256\tevaluator_sha256\tadapter_sha256\tscenario_id\tarm\trepeat\trun_id\tplanned_order\ttimeout_seconds\toperator_action' > "$ledger"
   printf 'fixture-cohort\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\tnone\n' \
     "$(git -C "$source_root" rev-parse HEAD)" \
@@ -217,12 +240,12 @@ assert_path_absent "$evaluator_failure_output/evaluator-failure-smoke" 'BENCHMAR
 setup_timeout_output="$TEST_TMP/setup-timeout-results"
 setup_timeout_ledger="$TEST_TMP/setup-timeout-ledger.tsv"
 setup_timeout_pid_file="$TEST_TMP/setup-timeout-child.pid"
-make_ledger "$setup_timeout_ledger" "$fixture_source" "$fixture_source/benchmarks/profiles/codex-writing-goals.conf" "$fixture_source/benchmarks/scenarios/fixture" setup-timeout-smoke treatment 1 1 3
+make_ledger "$setup_timeout_ledger" "$fixture_source" "$fixture_source/benchmarks/profiles/codex-writing-goals.conf" "$fixture_source/benchmarks/scenarios/fixture" setup-timeout-smoke treatment 1 1 8
 run_command env PATH="$execute_bin:$PATH" FIXTURE_SETUP_CHILD_PID="$setup_timeout_pid_file" bash "$fixture_source/benchmarks/run.sh" --ledger "$setup_timeout_ledger" --profile "$fixture_source/benchmarks/profiles/codex-writing-goals.conf" --scenario "$fixture_source/benchmarks/scenarios/fixture" --run-id setup-timeout-smoke --output-root "$setup_timeout_output" --execute
 assert_nonzero 'BENCHMARK_TIMEOUT: setup cannot consume an unbounded pre-agent interval'
 assert_file_contains "$setup_timeout_output/setup-timeout-smoke/result.tsv" $'^disposition\ttimed-out$' 'BENCHMARK_TIMEOUT: setup timeout has an unambiguous terminal disposition'
 assert_file_contains "$setup_timeout_output/setup-timeout-smoke/result.tsv" $'^stage\tsetup$' 'BENCHMARK_TIMEOUT: setup timeout is distinguished from agent failure'
-if [ -f "$setup_timeout_pid_file" ] && { ! kill -0 "$(cat "$setup_timeout_pid_file")" 2>/dev/null || ps -o stat= -p "$(cat "$setup_timeout_pid_file")" | grep -Eq '^[[:space:]]*[Zz]'; }; then pass 'BENCHMARK_TIMEOUT: setup watchdog terminates descendants'; else fail 'BENCHMARK_TIMEOUT: setup watchdog terminates descendants'; fi
+assert_descendant_terminated "$setup_timeout_pid_file" 'BENCHMARK_TIMEOUT: setup watchdog terminates descendants'
 
 hang_bin="$TEST_TMP/hang-bin"
 mkdir -p "$hang_bin"
@@ -237,12 +260,12 @@ EOF
 chmod +x "$hang_bin/codex"
 hang_output="$TEST_TMP/hang-results"
 hang_ledger="$TEST_TMP/hang-ledger.tsv"
-make_ledger "$hang_ledger" "$fixture_source" "$fixture_source/benchmarks/profiles/codex-control.conf" "$fixture_source/benchmarks/scenarios/fixture" hang-smoke control 1 1 3
+make_ledger "$hang_ledger" "$fixture_source" "$fixture_source/benchmarks/profiles/codex-control.conf" "$fixture_source/benchmarks/scenarios/fixture" hang-smoke control 1 1 8
 hang_pid_file="$TEST_TMP/hang-child.pid"
 run_command env PATH="$hang_bin:$PATH" HANG_CHILD_PID="$hang_pid_file" bash "$fixture_source/benchmarks/run.sh" --ledger "$hang_ledger" --profile "$fixture_source/benchmarks/profiles/codex-control.conf" --scenario "$fixture_source/benchmarks/scenarios/fixture" --run-id hang-smoke --output-root "$hang_output" --execute
 assert_nonzero 'BENCHMARK_TIMEOUT: timed-out agent exits non-zero'
 assert_file_contains "$hang_output/hang-smoke/result.tsv" $'^disposition\ttimed-out$' 'BENCHMARK_TIMEOUT: timeout has an unambiguous terminal disposition'
-if [ -f "$hang_pid_file" ] && { ! kill -0 "$(cat "$hang_pid_file")" 2>/dev/null || ps -o stat= -p "$(cat "$hang_pid_file")" | grep -Eq '^[[:space:]]*[Zz]'; }; then pass 'BENCHMARK_TIMEOUT: watchdog terminates agent descendants'; else fail 'BENCHMARK_TIMEOUT: watchdog terminates agent descendants'; fi
+assert_descendant_terminated "$hang_pid_file" 'BENCHMARK_TIMEOUT: watchdog terminates agent descendants'
 
 signal_bin="$TEST_TMP/signal-bin"
 mkdir -p "$signal_bin"
@@ -263,36 +286,136 @@ assert_file_contains "$signal_output/signal-smoke/result.tsv" $'^disposition\tsi
 evaluator_hang_output="$TEST_TMP/evaluator-hang-results"
 evaluator_hang_ledger="$TEST_TMP/evaluator-hang-ledger.tsv"
 evaluator_hang_pid_file="$TEST_TMP/evaluator-hang-child.pid"
-make_ledger "$evaluator_hang_ledger" "$fixture_source" "$fixture_source/benchmarks/profiles/codex-control.conf" "$fixture_source/benchmarks/scenarios/fixture" evaluator-hang-smoke control 1 1 3
+make_ledger "$evaluator_hang_ledger" "$fixture_source" "$fixture_source/benchmarks/profiles/codex-control.conf" "$fixture_source/benchmarks/scenarios/fixture" evaluator-hang-smoke control 1 1 8
 run_command env PATH="$execute_bin:$PATH" FIXTURE_EVALUATOR_HANG=1 FIXTURE_EVALUATOR_CHILD_PID="$evaluator_hang_pid_file" bash "$fixture_source/benchmarks/run.sh" --ledger "$evaluator_hang_ledger" --profile "$fixture_source/benchmarks/profiles/codex-control.conf" --scenario "$fixture_source/benchmarks/scenarios/fixture" --run-id evaluator-hang-smoke --output-root "$evaluator_hang_output" --execute
 assert_nonzero 'BENCHMARK_TIMEOUT: timed-out evaluator exits non-zero'
 assert_file_contains "$evaluator_hang_output/evaluator-hang-smoke/result.tsv" $'^disposition\ttimed-out$' 'BENCHMARK_TIMEOUT: evaluator timeout has an unambiguous terminal disposition'
-if [ -f "$evaluator_hang_pid_file" ] && { ! kill -0 "$(cat "$evaluator_hang_pid_file")" 2>/dev/null || ps -o stat= -p "$(cat "$evaluator_hang_pid_file")" | grep -Eq '^[[:space:]]*[Zz]'; }; then pass 'BENCHMARK_TIMEOUT: evaluator watchdog terminates descendants'; else fail 'BENCHMARK_TIMEOUT: evaluator watchdog terminates descendants'; fi
+assert_descendant_terminated "$evaluator_hang_pid_file" 'BENCHMARK_TIMEOUT: evaluator watchdog terminates descendants'
+
+# An isolated agent has no ambient Git identity to fall back on, so a commit can
+# only succeed if the runner exported a benchmark-scoped one.  The fixture
+# deliberately omits `git -c user.*`.
+identity_bin="$TEST_TMP/identity-bin"
+mkdir -p "$identity_bin"
+cat > "$identity_bin/codex" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+worktree=
+while [ "$#" -gt 0 ]; do
+  if [ "$1" = --cd ]; then
+    worktree=$2
+    shift 2
+  else
+    shift
+  fi
+done
+cat >/dev/null
+git -C "$worktree" commit --allow-empty -m 'fixture identity result' >/dev/null
+git -C "$worktree" log -1 --pretty='%an <%ae>|%cn <%ce>' > "$WG_IDENTITY_CAPTURE"
+EOF
+chmod +x "$identity_bin/codex"
+identity_capture="$TEST_TMP/identity-capture"
+identity_output="$TEST_TMP/identity-results"
+identity_ledger="$TEST_TMP/identity-ledger.tsv"
+make_ledger "$identity_ledger" "$fixture_source" "$fixture_source/benchmarks/profiles/codex-control.conf" "$fixture_source/benchmarks/scenarios/fixture" identity-smoke
+run_command env PATH="$identity_bin:$PATH" WG_IDENTITY_CAPTURE="$identity_capture" bash "$fixture_source/benchmarks/run.sh" --ledger "$identity_ledger" --profile "$fixture_source/benchmarks/profiles/codex-control.conf" --scenario "$fixture_source/benchmarks/scenarios/fixture" --run-id identity-smoke --output-root "$identity_output" --execute
+assert_success 'BENCHMARK_IDENTITY: isolated agent commits without ambient Git configuration'
+assert_file_contains "$identity_capture" '^Writing Goals Benchmark <benchmark@writing-goals\.invalid>\|Writing Goals Benchmark <benchmark@writing-goals\.invalid>$' 'BENCHMARK_IDENTITY: commit author and committer are benchmark-scoped'
+
+# One declared timeout covers setup, agent, and evaluator.  Setup deliberately
+# consumes most of the budget; a stage that received a fresh full budget would
+# push the total well past the ledger timeout.
+cat > "$fixture_source/install.sh" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+sleep 5
+EOF
+chmod +x "$fixture_source/install.sh"
+git -C "$fixture_source" add install.sh
+git -C "$fixture_source" -c user.name='Benchmark Test' -c user.email='benchmark@example.invalid' commit -m 'fixture slow but succeeding install' >/dev/null
+budget_output="$TEST_TMP/budget-results"
+budget_ledger="$TEST_TMP/budget-ledger.tsv"
+budget_pid_file="$TEST_TMP/budget-child.pid"
+make_ledger "$budget_ledger" "$fixture_source" "$fixture_source/benchmarks/profiles/codex-writing-goals.conf" "$fixture_source/benchmarks/scenarios/fixture" budget-smoke treatment 1 1 12
+run_command env PATH="$hang_bin:$PATH" HANG_CHILD_PID="$budget_pid_file" bash "$fixture_source/benchmarks/run.sh" --ledger "$budget_ledger" --profile "$fixture_source/benchmarks/profiles/codex-writing-goals.conf" --scenario "$fixture_source/benchmarks/scenarios/fixture" --run-id budget-smoke --output-root "$budget_output" --execute
+assert_nonzero 'BENCHMARK_BUDGET: agent still times out after setup consumed most of the budget'
+assert_file_contains "$budget_output/budget-smoke/result.tsv" $'^stage\tagent$' 'BENCHMARK_BUDGET: remaining budget is charged to the agent stage'
+budget_elapsed="$(awk -F '\t' '$1 == "elapsed_ms" { print $2 }' "$budget_output/budget-smoke/result.tsv" 2>/dev/null)"
+TEST_COUNT=$((TEST_COUNT + 1))
+
+# Sharing one budget makes the total track the declared timeout rather than the
+# sum of the stages: correct is ~13s (12s budget plus the watchdog's grace),
+# whereas handing the agent a fresh 12s would land near 19s.
+if [ -n "$budget_elapsed" ] && [ "$budget_elapsed" -lt 15000 ]; then
+  pass 'BENCHMARK_BUDGET: no stage receives a fresh full timeout budget'
+else
+  fail "BENCHMARK_BUDGET: no stage receives a fresh full timeout budget (elapsed_ms=${budget_elapsed:-missing})"
+fi
+
+# An operator interrupt must not leave a model process running, and must still
+# explain why the run produced no measurement.
+interrupt_output="$TEST_TMP/interrupt-results"
+interrupt_ledger="$TEST_TMP/interrupt-ledger.tsv"
+interrupt_pid_file="$TEST_TMP/interrupt-child.pid"
+make_ledger "$interrupt_ledger" "$fixture_source" "$fixture_source/benchmarks/profiles/codex-control.conf" "$fixture_source/benchmarks/scenarios/fixture" interrupt-smoke control 1 1 60
+# A non-interactive shell starts background jobs with SIGINT ignored, and an
+# ignored signal cannot be trapped.  Restore the default disposition before exec
+# so this exercises the operator's Ctrl-C path rather than the harness's.
+env PATH="$hang_bin:$PATH" HANG_CHILD_PID="$interrupt_pid_file" perl -e '$SIG{INT} = "DEFAULT"; $SIG{HUP} = "DEFAULT"; exec @ARGV or die "exec: $!"' -- bash "$fixture_source/benchmarks/run.sh" --ledger "$interrupt_ledger" --profile "$fixture_source/benchmarks/profiles/codex-control.conf" --scenario "$fixture_source/benchmarks/scenarios/fixture" --run-id interrupt-smoke --output-root "$interrupt_output" --execute >"$TEST_TMP/interrupt.stdout" 2>"$TEST_TMP/interrupt.stderr" &
+interrupt_runner_pid=$!
+interrupt_waited=0
+while [ ! -s "$interrupt_pid_file" ] && [ "$interrupt_waited" -lt 200 ]; do
+  sleep 0.1
+  interrupt_waited=$((interrupt_waited + 1))
+done
+kill -INT "$interrupt_runner_pid" 2>/dev/null || true
+wait "$interrupt_runner_pid"
+interrupt_status=$?
+TEST_COUNT=$((TEST_COUNT + 1))
+if [ "$interrupt_status" -ne 0 ]; then
+  pass 'BENCHMARK_INTERRUPT: interrupted runner exits non-zero'
+else
+  fail 'BENCHMARK_INTERRUPT: interrupted runner exits non-zero'
+fi
+assert_file_contains "$interrupt_output/interrupt-smoke/result.tsv" $'^disposition\tsignaled$' 'BENCHMARK_INTERRUPT: interrupted run retains signalled terminal evidence'
+assert_file_contains "$interrupt_output/interrupt-smoke/result.tsv" $'^acceptance\tfalse$' 'BENCHMARK_INTERRUPT: interrupted run is never accepted'
+assert_descendant_terminated "$interrupt_pid_file" 'BENCHMARK_INTERRUPT: interrupt terminates the active agent descendants'
+
+# Observed start times are wall-clock epoch milliseconds in real evidence.  The
+# fixture must use the same scale, otherwise an order check that only works on
+# small synthetic values would look correct here and reject every real cohort.
+make_cohort() {
+  cohort_ledger=$1
+  cohort_root=$2
+  cohort_order=1
+  cohort_epoch_ms=1900000000000
+  rm -rf "$cohort_root"
+  printf '%s\n' $'cohort_id\tbase_commit\tprofile_sha256\tprompt_sha256\tevaluator_sha256\tadapter_sha256\tscenario_id\tarm\trepeat\trun_id\tplanned_order\ttimeout_seconds\toperator_action' > "$cohort_ledger"
+  for cohort_scenario in alpha beta gamma; do
+    for cohort_repeat in 1 2; do
+      for cohort_arm in control treatment; do
+        cohort_run="${cohort_scenario}-${cohort_arm}-${cohort_repeat}"
+        printf 'aggregate-cohort\tbase\tprofile\tprompt\tevaluator\tadapter\t%s\t%s\t%s\t%s\t%s\t5\tnone\n' "$cohort_scenario" "$cohort_arm" "$cohort_repeat" "$cohort_run" "$cohort_order" >> "$cohort_ledger"
+        cohort_dir="$cohort_root/$cohort_run"
+        mkdir -p "$cohort_dir"
+        {
+          printf 'run_id\t%s\n' "$cohort_run"
+          printf 'started_ms\t%s\n' "$((cohort_epoch_ms + cohort_order * 1000))"
+          printf 'cohort_id\taggregate-cohort\nbase_commit\tbase\nprofile_sha256\tprofile\nprompt_sha256\tprompt\nevaluator_sha256\tevaluator\nadapter_sha256\tadapter\n'
+          printf 'model\tfixture\n'
+          if [ "$cohort_arm" = control ]; then printf 'workflow\tcontrol\n'; else printf 'workflow\twriting-goals\n'; fi
+          printf 'scenario_id\t%s\narm\t%s\nrepeat\t%s\nplanned_order\t%s\ntimeout_seconds\t5\noperator_action\tnone\n' "$cohort_scenario" "$cohort_arm" "$cohort_repeat" "$cohort_order"
+        } > "$cohort_dir/manifest.tsv"
+        printf 'disposition\tpassed\nacceptance\ttrue\nexit_code\t0\nstage\tevaluator\nelapsed_ms\t10\n' > "$cohort_dir/result.tsv"
+        cohort_order=$((cohort_order + 1))
+      done
+    done
+  done
+}
 
 aggregate_ledger="$TEST_TMP/aggregate-ledger.tsv"
 aggregate_root="$TEST_TMP/aggregate-results"
-printf '%s\n' $'cohort_id\tbase_commit\tprofile_sha256\tprompt_sha256\tevaluator_sha256\tadapter_sha256\tscenario_id\tarm\trepeat\trun_id\tplanned_order\ttimeout_seconds\toperator_action' > "$aggregate_ledger"
-aggregate_order=1
-for aggregate_scenario in alpha beta gamma; do
-  for aggregate_repeat in 1 2; do
-    for aggregate_arm in control treatment; do
-      aggregate_run="${aggregate_scenario}-${aggregate_arm}-${aggregate_repeat}"
-      printf 'aggregate-cohort\tbase\tprofile\tprompt\tevaluator\tadapter\t%s\t%s\t%s\t%s\t%s\t5\tnone\n' "$aggregate_scenario" "$aggregate_arm" "$aggregate_repeat" "$aggregate_run" "$aggregate_order" >> "$aggregate_ledger"
-      aggregate_dir="$aggregate_root/$aggregate_run"
-      mkdir -p "$aggregate_dir"
-      {
-        printf 'run_id\t%s\n' "$aggregate_run"
-        printf 'started_ms\t%s\n' "$aggregate_order"
-        printf 'cohort_id\taggregate-cohort\nbase_commit\tbase\nprofile_sha256\tprofile\nprompt_sha256\tprompt\nevaluator_sha256\tevaluator\nadapter_sha256\tadapter\n'
-        printf 'model\tfixture\n'
-        if [ "$aggregate_arm" = control ]; then printf 'workflow\tcontrol\n'; else printf 'workflow\twriting-goals\n'; fi
-        printf 'scenario_id\t%s\narm\t%s\nrepeat\t%s\nplanned_order\t%s\ntimeout_seconds\t5\noperator_action\tnone\n' "$aggregate_scenario" "$aggregate_arm" "$aggregate_repeat" "$aggregate_order"
-      } > "$aggregate_dir/manifest.tsv"
-      printf 'disposition\tpassed\nacceptance\ttrue\nexit_code\t0\nstage\tevaluator\nelapsed_ms\t10\n' > "$aggregate_dir/result.tsv"
-      aggregate_order=$((aggregate_order + 1))
-    done
-  done
-done
+make_cohort "$aggregate_ledger" "$aggregate_root"
 run_command bash "$aggregator" --ledger "$aggregate_ledger" --run-root "$aggregate_root"
 assert_success 'BENCHMARK_AGGREGATE: declared 12-run cohort aggregates deterministically'
 assert_file_contains "$RUN_OUT" $'^scenario_id\tarm\trepeat\tdisposition' 'BENCHMARK_AGGREGATE: output has a stable TSV header'
@@ -315,5 +438,66 @@ printf 'base_commit\tmismatch\n' >> "$aggregate_root/alpha-control-1/manifest.ts
 run_command bash "$aggregator" --ledger "$aggregate_ledger" --run-root "$aggregate_root"
 assert_nonzero 'BENCHMARK_AGGREGATE: duplicate or mismatched manifest identity is rejected'
 assert_contains "$(cat "$RUN_ERR")" 'invalid-pair' 'BENCHMARK_AGGREGATE: identity rejection is classified for RCA'
+
+# Declared interleaving is an experiment-validity property, so the observed start
+# times must actually match planned orders 1..12 rather than merely be recorded.
+order_ledger="$TEST_TMP/order-ledger.tsv"
+order_root="$TEST_TMP/order-results"
+make_cohort "$order_ledger" "$order_root"
+order_first_ms="$(awk -F '\t' '$1 == "started_ms" { print $2 }' "$order_root/alpha-control-1/manifest.tsv")"
+order_last_ms="$(awk -F '\t' '$1 == "started_ms" { print $2 }' "$order_root/gamma-treatment-2/manifest.tsv")"
+perl -0pi -e "s/^started_ms\t.*\$/started_ms\t$order_last_ms/m" "$order_root/alpha-control-1/manifest.tsv"
+perl -0pi -e "s/^started_ms\t.*\$/started_ms\t$order_first_ms/m" "$order_root/gamma-treatment-2/manifest.tsv"
+run_command bash "$aggregator" --ledger "$order_ledger" --run-root "$order_root"
+assert_nonzero 'BENCHMARK_AGGREGATE: cohort executed out of its declared order is rejected'
+assert_contains "$(cat "$RUN_ERR")" 'execution order does not match ledger' 'BENCHMARK_AGGREGATE: out-of-order execution is classified for RCA'
+
+missing_start_ledger="$TEST_TMP/missing-start-ledger.tsv"
+missing_start_root="$TEST_TMP/missing-start-results"
+make_cohort "$missing_start_ledger" "$missing_start_root"
+perl -0pi -e 's/^started_ms\t.*\n//m' "$missing_start_root/beta-control-1/manifest.tsv"
+run_command bash "$aggregator" --ledger "$missing_start_ledger" --run-root "$missing_start_root"
+assert_nonzero 'BENCHMARK_AGGREGATE: run without observed start evidence is rejected'
+assert_contains "$(cat "$RUN_ERR")" 'started_ms' 'BENCHMARK_AGGREGATE: missing start evidence is classified for RCA'
+
+# Comparing arms only means something if every run in an arm used the same
+# profile and the same model.
+profile_drift_ledger="$TEST_TMP/profile-drift-ledger.tsv"
+profile_drift_root="$TEST_TMP/profile-drift-results"
+make_cohort "$profile_drift_ledger" "$profile_drift_root"
+awk -F '\t' 'BEGIN { OFS = "\t" } $10 == "alpha-treatment-1" { $3 = "drifted" } { print }' "$profile_drift_ledger" > "$profile_drift_ledger.next"
+mv "$profile_drift_ledger.next" "$profile_drift_ledger"
+perl -0pi -e 's/^profile_sha256\tprofile$/profile_sha256\tdrifted/m' "$profile_drift_root/alpha-treatment-1/manifest.tsv"
+run_command bash "$aggregator" --ledger "$profile_drift_ledger" --run-root "$profile_drift_root"
+assert_nonzero 'BENCHMARK_AGGREGATE: profile drift within an arm is rejected'
+assert_contains "$(cat "$RUN_ERR")" 'profile drift' 'BENCHMARK_AGGREGATE: profile drift is classified for RCA'
+assert_not_contains "$(cat "$RUN_ERR")" 'expected exactly three scenarios' 'BENCHMARK_AGGREGATE: drift rejection reports one unambiguous cause'
+
+model_drift_ledger="$TEST_TMP/model-drift-ledger.tsv"
+model_drift_root="$TEST_TMP/model-drift-results"
+make_cohort "$model_drift_ledger" "$model_drift_root"
+perl -0pi -e 's/^model\tfixture$/model\tdrifted/m' "$model_drift_root/beta-treatment-1/manifest.tsv"
+run_command bash "$aggregator" --ledger "$model_drift_ledger" --run-root "$model_drift_root"
+assert_nonzero 'BENCHMARK_AGGREGATE: model drift within an arm is rejected'
+assert_contains "$(cat "$RUN_ERR")" 'model drift' 'BENCHMARK_AGGREGATE: model drift is classified for RCA'
+
+# A dry-run row has no measurement, so it can never enter an aggregate.
+planned_ledger="$TEST_TMP/planned-ledger.tsv"
+planned_root="$TEST_TMP/planned-results"
+make_cohort "$planned_ledger" "$planned_root"
+printf 'disposition\tplanned\nacceptance\tfalse\nexit_code\t\nstage\tplanning\nelapsed_ms\t0\n' > "$planned_root/beta-control-2/result.tsv"
+run_command bash "$aggregator" --ledger "$planned_ledger" --run-root "$planned_root"
+assert_nonzero 'BENCHMARK_AGGREGATE: planned dry-run evidence cannot be aggregated'
+assert_contains "$(cat "$RUN_ERR")" 'planned run is incomplete' 'BENCHMARK_AGGREGATE: incomplete evidence is classified for RCA'
+
+# An interrupted run is a legitimate non-pass outcome, so its terminal evidence
+# must remain aggregatable rather than read as corrupt.
+signaled_ledger="$TEST_TMP/signaled-ledger.tsv"
+signaled_root="$TEST_TMP/signaled-results"
+make_cohort "$signaled_ledger" "$signaled_root"
+printf 'disposition\tsignaled\nacceptance\tfalse\nexit_code\t130\nstage\tsetup\nelapsed_ms\t42\n' > "$signaled_root/gamma-control-1/result.tsv"
+run_command bash "$aggregator" --ledger "$signaled_ledger" --run-root "$signaled_root"
+assert_success 'BENCHMARK_AGGREGATE: interrupted-run evidence is valid terminal evidence'
+assert_contains "$(cat "$RUN_OUT")" $'gamma\tcontrol\t1\tsignaled\tfalse\t42\tnone\tpassed\ttrue\tcomparable\tdiscordant-paired-acceptance\tdiscordant' 'BENCHMARK_AGGREGATE: interrupted run is reported as a discordant non-pass'
 
 finish_tests

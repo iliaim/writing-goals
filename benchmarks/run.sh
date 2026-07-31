@@ -172,6 +172,66 @@ write_result() {
   } > "$result"
 }
 
+# A run owns at most one setsid-led child and its watchdog at a time.  The signal
+# handler needs both, plus the stage name, to leave no descendant behind.
+active_child_pid=
+active_watchdog_pid=
+active_stage=runner
+runtime_home=
+credential_values=
+
+# Terminate a setsid-led child and everything it spawned.  The leader may not
+# have reached its setsid() call yet, so signal the process group and the bare
+# PID, and sweep direct children as a fallback.
+terminate_process_group() {
+  terminate_pid=$1
+  command -v pkill >/dev/null 2>&1 && pkill -TERM -P "$terminate_pid" 2>/dev/null || true
+  kill -TERM "-$terminate_pid" 2>/dev/null || true
+  kill -TERM "$terminate_pid" 2>/dev/null || true
+  sleep 1
+  command -v pkill >/dev/null 2>&1 && pkill -KILL -P "$terminate_pid" 2>/dev/null || true
+  kill -KILL "-$terminate_pid" 2>/dev/null || true
+  kill -KILL "$terminate_pid" 2>/dev/null || true
+}
+
+cleanup_runtime() { [ -z "$runtime_home" ] || rm -rf -- "$runtime_home"; }
+
+discard_credential_leak() {
+  leaked_path=$1
+  printf 'credential value found in retained benchmark evidence (%s); discarded run\n' "$leaked_path" >&2
+  rm -rf -- "$run_dir"
+  exit 1
+}
+
+# Defined before the signal traps so an interrupt can never reach an undefined
+# credential guard and retain secret-bearing evidence.
+reject_credential_leaks() {
+  [ -n "$credential_values" ] && [ -s "$credential_values" ] || return 0
+  while IFS= read -r credential_value || [ -n "$credential_value" ]; do
+    leaked_path="$(grep -a -r -F -l -- "$credential_value" "$run_dir/logs" "$worktree" || true)"
+    [ -z "$leaked_path" ] || discard_credential_leak "$leaked_path"
+  done < "$credential_values"
+}
+
+# An interrupted benchmark must not leave a model process, evaluator, or
+# watchdog running, and must still say why the run has no measurement.
+on_signal() {
+  signal_number=$1
+  trap - HUP INT TERM
+  [ -z "$active_watchdog_pid" ] || kill "$active_watchdog_pid" 2>/dev/null || true
+  [ -z "$active_child_pid" ] || terminate_process_group "$active_child_pid"
+  [ -z "$active_watchdog_pid" ] || wait "$active_watchdog_pid" 2>/dev/null || true
+  [ -z "$active_child_pid" ] || wait "$active_child_pid" 2>/dev/null || true
+  reject_credential_leaks
+  write_result signaled "$((128 + signal_number))" "$active_stage"
+  cleanup_runtime
+  exit "$((128 + signal_number))"
+}
+trap cleanup_runtime EXIT
+trap 'on_signal 1' HUP
+trap 'on_signal 2' INT
+trap 'on_signal 15' TERM
+
 write_manifest
 write_result planned '' planning
 printf 'Benchmark %s: %s/%s (%s, %s)\n' "$run_id" "$host" "$workflow" "$model" "$mode"
@@ -196,8 +256,6 @@ if [ "$worktree_status" -ne 0 ]; then
 fi
 
 runtime_home="$(mktemp -d "${TMPDIR:-/tmp}/writing-goals-benchmark-home.XXXXXX")"
-cleanup_runtime() { rm -rf -- "$runtime_home"; }
-trap cleanup_runtime EXIT HUP INT TERM
 credential_values="$runtime_home/credential-values"
 
 setup_failed() {
@@ -221,14 +279,13 @@ if [ "$workflow" = writing-goals ]; then
       sleep "$setup_timeout_seconds"
       if kill -0 "$install_pid" 2>/dev/null; then
         printf '%s\n' timed-out > "$run_dir/.setup-timeout"
-        command -v pkill >/dev/null 2>&1 && pkill -TERM -P "$install_pid" 2>/dev/null || true
-        kill -TERM "-$install_pid" 2>/dev/null || true
-        sleep 1
-        command -v pkill >/dev/null 2>&1 && pkill -KILL -P "$install_pid" 2>/dev/null || true
-        kill -KILL "-$install_pid" 2>/dev/null || true
+        terminate_process_group "$install_pid"
       fi
     ) &
     install_watchdog_pid=$!
+    active_stage=setup
+    active_child_pid=$install_pid
+    active_watchdog_pid=$install_watchdog_pid
     wait "$install_pid"
     install_status=$?
     if [ -f "$run_dir/.setup-timeout" ]; then
@@ -237,6 +294,8 @@ if [ "$workflow" = writing-goals ]; then
       kill "$install_watchdog_pid" 2>/dev/null || true
       wait "$install_watchdog_pid" 2>/dev/null || true
     fi
+    active_child_pid=
+    active_watchdog_pid=
     set -e
   }
   run_install_with_timeout
@@ -263,21 +322,6 @@ if [ -n "${WG_CODEX_AUTH_SOURCE:-}" ]; then
 fi
 unset WG_CODEX_AUTH_SOURCE
 
-discard_credential_leak() {
-  leaked_path=$1
-  printf 'credential value found in retained benchmark evidence (%s); discarded run\n' "$leaked_path" >&2
-  rm -rf -- "$run_dir"
-  exit 1
-}
-
-reject_credential_leaks() {
-  [ -s "$credential_values" ] || return 0
-  while IFS= read -r credential_value || [ -n "$credential_value" ]; do
-    leaked_path="$(grep -a -r -F -l -- "$credential_value" "$run_dir/logs" "$worktree" || true)"
-    [ -z "$leaked_path" ] || discard_credential_leak "$leaked_path"
-  done < "$credential_values"
-}
-
 # Perl ships with macOS and common Linux distributions.  It gives the adapter a
 # new session/process group, allowing the watchdog to terminate descendants too.
 agent_timeout_seconds="$(remaining_timeout_seconds)"
@@ -300,14 +344,13 @@ env HOME="$runtime_home" CODEX_HOME="$runtime_home/.codex" \
     sleep "$agent_timeout_seconds"
     if kill -0 "$agent_pid" 2>/dev/null; then
       printf '%s\n' timed-out > "$run_dir/.timeout"
-      command -v pkill >/dev/null 2>&1 && pkill -TERM -P "$agent_pid" 2>/dev/null || true
-      kill -TERM "-$agent_pid" 2>/dev/null || true
-      sleep 1
-      command -v pkill >/dev/null 2>&1 && pkill -KILL -P "$agent_pid" 2>/dev/null || true
-      kill -KILL "-$agent_pid" 2>/dev/null || true
+      terminate_process_group "$agent_pid"
     fi
   ) &
   watchdog_pid=$!
+  active_stage=agent
+  active_child_pid=$agent_pid
+  active_watchdog_pid=$watchdog_pid
   wait "$agent_pid"
   agent_status=$?
   if [ -f "$run_dir/.timeout" ]; then
@@ -316,6 +359,8 @@ env HOME="$runtime_home" CODEX_HOME="$runtime_home/.codex" \
     kill "$watchdog_pid" 2>/dev/null || true
     wait "$watchdog_pid" 2>/dev/null || true
   fi
+  active_child_pid=
+  active_watchdog_pid=
   set -e
 }
 
@@ -352,14 +397,13 @@ run_evaluator_with_timeout() {
     sleep "$evaluator_timeout_seconds"
     if kill -0 "$evaluator_pid" 2>/dev/null; then
       printf '%s\n' timed-out > "$run_dir/.evaluator-timeout"
-      command -v pkill >/dev/null 2>&1 && pkill -TERM -P "$evaluator_pid" 2>/dev/null || true
-      kill -TERM "-$evaluator_pid" 2>/dev/null || true
-      sleep 1
-      command -v pkill >/dev/null 2>&1 && pkill -KILL -P "$evaluator_pid" 2>/dev/null || true
-      kill -KILL "-$evaluator_pid" 2>/dev/null || true
+      terminate_process_group "$evaluator_pid"
     fi
   ) &
   evaluator_watchdog_pid=$!
+  active_stage=evaluator
+  active_child_pid=$evaluator_pid
+  active_watchdog_pid=$evaluator_watchdog_pid
   wait "$evaluator_pid"
   evaluator_status=$?
   if [ -f "$run_dir/.evaluator-timeout" ]; then
@@ -368,6 +412,8 @@ run_evaluator_with_timeout() {
     kill "$evaluator_watchdog_pid" 2>/dev/null || true
     wait "$evaluator_watchdog_pid" 2>/dev/null || true
   fi
+  active_child_pid=
+  active_watchdog_pid=
 }
 run_evaluator_with_timeout
 set -e

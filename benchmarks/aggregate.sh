@@ -118,34 +118,51 @@ while IFS=$'\t' read -r cohort_id base_commit profile_hash prompt_hash evaluator
     *[!0-9]*) printf 'rca trigger: invalid-pair (invalid exit_code for %s)\n' "$run_id" >&2; exit 1 ;;
   esac
   case "$disposition:$stage:$exit_code" in
-    planned:planning:|setup-failed:source-check:|setup-failed:source-check:[0-9]*|setup-failed:worktree:[0-9]*|setup-failed:install:[0-9]*|setup-failed:authentication:[0-9]*|timed-out:setup:|timed-out:setup:[0-9]*|timed-out:agent:[0-9]*|timed-out:evaluator:[0-9]*|signaled:agent:[0-9]*|signaled:evaluator:[0-9]*|agent-failed:agent:[0-9]*|evaluator-failed:evaluator:[0-9]*|passed:evaluator:0) ;;
+    planned:planning:|setup-failed:source-check:|setup-failed:source-check:[0-9]*|setup-failed:worktree:[0-9]*|setup-failed:install:[0-9]*|setup-failed:authentication:[0-9]*|timed-out:setup:|timed-out:setup:[0-9]*|timed-out:agent:[0-9]*|timed-out:evaluator:[0-9]*|signaled:runner:[0-9]*|signaled:setup:[0-9]*|signaled:agent:[0-9]*|signaled:evaluator:[0-9]*|agent-failed:agent:[0-9]*|evaluator-failed:evaluator:[0-9]*|passed:evaluator:0) ;;
     *) printf 'rca trigger: invalid-pair (disposition detail mismatch for %s)\n' "$run_id" >&2; exit 1 ;;
   esac
   if [ "$disposition" = passed ]; then [ "$acceptance" = true ] || { printf 'rca trigger: invalid-pair (passed run not accepted for %s)\n' "$run_id" >&2; exit 1; }; else [ "$acceptance" = false ] || { printf 'rca trigger: invalid-pair (non-pass accepted for %s)\n' "$run_id" >&2; exit 1; }; fi
-  printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$scenario_id" "$arm" "$repeat" "$run_id" "$disposition" "$acceptance" "$elapsed_ms" "$operator_action" "$started_ms" "$profile_hash" "$model" >> "$facts"
+  printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$scenario_id" "$arm" "$repeat" "$run_id" "$disposition" "$acceptance" "$elapsed_ms" "$operator_action" "$started_ms" "$profile_hash" "$model" "$planned_order" >> "$facts"
 done < "$ledger"
 
 # A valid cohort contains the paired control/treatment comparison twice for
 # every scenario.  Do not silently aggregate an incomplete or duplicated pair.
 awk -F '\t' '
-  { pair[$1 SUBSEP $3 SUBSEP $2]++; repeats[$1 SUBSEP $2]++; pair_any[$1 SUBSEP $3]++; if (seen_profile[$2] && profile[$2] != $10) { print "rca trigger: invalid-pair (profile drift)" > "/dev/stderr"; exit 1 }; profile[$2]=$10; seen_profile[$2]=1; if (seen_model[$2] && model[$2] != $11) { print "rca trigger: invalid-pair (model drift)" > "/dev/stderr"; exit 1 }; model[$2]=$11; seen_model[$2]=1; starts[$9]=$9 }
+  function reject(reason) { print "rca trigger: invalid-pair (" reason ")" > "/dev/stderr"; aborted = 1; exit 1 }
+  {
+    pair[$1 SUBSEP $3 SUBSEP $2]++
+    repeats[$1 SUBSEP $2]++
+    pair_any[$1 SUBSEP $3]++
+    if (seen_profile[$2] && profile[$2] != $10) reject("profile drift")
+    profile[$2] = $10
+    seen_profile[$2] = 1
+    if (seen_model[$2] && model[$2] != $11) reject("model drift")
+    model[$2] = $11
+    seen_model[$2] = 1
+    # Key the observed start time by the planned order the run was declared to
+    # occupy.  Comparing those keys in sequence is what proves the cohort ran in
+    # its declared interleaving instead of merely claiming to.
+    starts[$12] = $9
+  }
   END {
-    for (key in pair) if (pair[key] != 1) { print "rca trigger: invalid-pair (duplicate arm/repeat)" > "/dev/stderr"; exit 1 }
-    for (key in pair_any) if (pair_any[key] != 2) { print "rca trigger: invalid-pair (missing control/treatment pair)" > "/dev/stderr"; exit 1 }
-    for (key in repeats) if (repeats[key] != 2) { print "rca trigger: invalid-pair (expected exactly two repeats per scenario/arm)" > "/dev/stderr"; exit 1 }
+    if (aborted) exit 1
+    for (key in pair) if (pair[key] != 1) reject("duplicate arm/repeat")
+    for (key in pair_any) if (pair_any[key] != 2) reject("missing control/treatment pair")
+    for (key in repeats) if (repeats[key] != 2) reject("expected exactly two repeats per scenario/arm")
     for (key in pair_any) { split(key, components, SUBSEP); scenarios[components[1]] = 1 }
     for (scenario in scenarios) scenario_count++
-    if (scenario_count != 3) { print "rca trigger: invalid-pair (expected exactly three scenarios)" > "/dev/stderr"; exit 1 }
-    for (order = 2; order <= 12; order++) if (starts[order] <= starts[order - 1]) { print "rca trigger: invalid-pair (execution order does not match ledger)" > "/dev/stderr"; exit 1 }
+    if (scenario_count != 3) reject("expected exactly three scenarios")
+    for (order = 1; order <= 12; order++) if (!(order in starts)) reject("missing observed start for planned order " order)
+    for (order = 2; order <= 12; order++) if (starts[order] + 0 <= starts[order - 1] + 0) reject("execution order does not match ledger")
   }
 ' "$facts"
 
 printf 'scenario_id\tarm\trepeat\tdisposition\tacceptance\telapsed_ms\toperator_action\tpaired_disposition\tpaired_acceptance\tpair_status\trca_trigger\ttwo_repeat_consistency\n'
 tab=$(printf '\t')
-LC_ALL=C sort -t "$tab" -k1,1 -k3,3n -k2,2 "$facts" | while IFS=$'\t' read -r scenario_id arm repeat run_id disposition acceptance elapsed_ms operator_action; do
+LC_ALL=C sort -t "$tab" -k1,1 -k3,3n -k2,2 "$facts" | while IFS=$'\t' read -r scenario_id arm repeat run_id disposition acceptance elapsed_ms operator_action started_ms profile_hash model planned_order; do
   if [ "$arm" = control ]; then paired_arm=treatment; else paired_arm=control; fi
   paired_line="$(awk -F '\t' -v scenario="$scenario_id" -v repeat="$repeat" -v arm="$paired_arm" '$1 == scenario && $2 == arm && $3 == repeat { print }' "$facts")"
-  IFS=$'\t' read -r _ paired_arm _ _ paired_disposition paired_acceptance _ _ <<EOF
+  IFS=$'\t' read -r _ paired_arm _ _ paired_disposition paired_acceptance _ _ _ _ _ _ <<EOF
 $paired_line
 EOF
   pair_status=comparable
