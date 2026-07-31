@@ -8,8 +8,8 @@ okf_version: "0.2"
 
 [![CI](https://github.com/iliaim/writing-goals/actions/workflows/ci.yml/badge.svg)](https://github.com/iliaim/writing-goals/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Platforms: Claude Code and Codex](https://img.shields.io/badge/platforms-Claude%20Code%20%2B%20Codex-6366f1.svg)](#platform-support)
-[![Bash 3.2+](https://img.shields.io/badge/bash-3.2%2B-lightgrey.svg)](#build-and-install)
+[![Platforms: Claude Code and Codex](https://img.shields.io/badge/platforms-Claude%20Code%20%2B%20Codex-4f46e5.svg)](#platform-support)
+[![Bash 3.2+](https://img.shields.io/badge/bash-3.2%2B-555.svg)](#build-and-install)
 
 `writing-goals` turns open-ended agent work into bounded goal contracts with exact acceptance
 checks, independent verification, and explicit limits on retries, time, and cost. The core method
@@ -19,7 +19,7 @@ is platform-neutral; this repository currently ships tested Claude Code and Code
 > **The maker does not certify its own completion.** A fresh checker must be able to rerun the
 > same acceptance command and reach the same result.
 
-**New here?** [Quick start](docs/quickstart.md) · [Worked example](#worked-example) ·
+**New here?** [Install guide](docs/quickstart.md) · [Worked example](#worked-example) ·
 [Security model](docs/security-model.md)
 
 ## How it works
@@ -28,15 +28,22 @@ Two roles, one pre-written check, and stop rules that are decided before impleme
 
 ```mermaid
 flowchart TD
-    A(["Intent"]) --> B["1 · Investigate<br/>real commands, tests, CI, working tree"]
-    B --> C["2 · Write the goal contract<br/>outcome · scope · evidence · stop rules"]
+    accTitle: Goal execution loop
+    accDescr {
+      Intent leads to investigation and a written goal contract. A maker implements one slice.
+      A fresh checker reruns the exact acceptance command. Green completes with retained raw
+      output and exit code. Red within remaining limits returns to the maker. Invalid state or
+      a reached stop rule needs a human.
+    }
+    A(["Intent"]) --> B["Investigate<br/>real commands, tests, CI, working tree"]
+    B --> C["Write the goal contract<br/>outcome · scope · evidence · stop rules"]
 
     subgraph maker ["MAKER — may change code"]
-        D["3 · Implement one slice"]
+        D["Implement one slice"]
     end
 
     subgraph checker ["FRESH CHECKER — may not change code"]
-        E{"4 · Rerun the exact<br/>acceptance command"}
+        E{"Rerun the exact<br/>acceptance command"}
     end
 
     C --> D
@@ -46,7 +53,7 @@ flowchart TD
     E -->|"invalid state, or a<br/>stop rule is reached"| G(["Needs human"])
 
     style maker stroke:#6366f1,stroke-width:2px
-    style checker stroke:#f59e0b,stroke-width:2px
+    style checker stroke:#b45309,stroke-width:2px
     classDef entry fill:#f1f5f9,stroke:#94a3b8,color:#0f172a
     classDef step fill:#eef2ff,stroke:#818cf8,color:#312e81
     classDef check fill:#fef3c7,stroke:#f59e0b,color:#78350f
@@ -65,6 +72,8 @@ bounded retry; invalid state or an exhausted limit stops for a human.
 
 The separation is the point. A maker can announce success, but the announcement never advances the
 goal — only a rerun of the pre-written command does, and its raw output is what gets retained.
+Investigation and contract authoring come before either role is assigned, so the first two steps
+sit outside both lanes.
 
 ## Why it exists
 
@@ -105,6 +114,9 @@ $ bash tests/auth/run.sh; echo "exit=$?"
 ...
 PASS: 12 scenarios
 exit=0
+$ bash tests/run.sh; echo "exit=$?"
+...
+exit=0
 ```
 
 The exact paths and commands must come from the target repository. An agent must investigate
@@ -144,9 +156,9 @@ request.
 | Work is multi-turn or will run unattended | A small one-shot edit needs less coordination than a goal adds |
 | Completion has an observable end state worth enforcing | The desired outcome is still unknown and the work is exploratory |
 | A migration, refactor, or feature splits into verifiable slices | There is no meaningful verification surface |
-| Another agent or deterministic process must confirm the result | The decision is irreversible or external without human authorization |
+| Another agent or deterministic process must independently confirm the result | An irreversible decision, production change, or external send lacks explicit human authorization |
 
-> [!NOTE]
+> [!WARNING]
 > This repository is not a sandbox, scheduler, autonomous DAG runner, or substitute for product
 > decisions. The host owns the bounded, sequential execution protocol; public documentation does
 > not create a separate continuation mechanism. Separate continuation mechanisms are out of scope.
@@ -211,17 +223,17 @@ bash dist/writing-goals/install.sh codex
 bash dist/writing-goals/install.sh all
 ```
 
+Transactional `all` installation uses compensated rollback, not crash-safe storage: `SIGKILL`,
+power loss, and unsupported concurrent changes remain outside the installer contract.
+
 <details>
-<summary><b>Install targets, collision rules, and local refresh</b></summary>
+<summary><b>Install targets, collision rules, update, and local refresh</b></summary>
 
 Claude is installed at `~/.claude/skills/writing-goals`; Codex at
 `${CODEX_HOME:-$HOME/.codex}/skills/writing-goals`. A normal install refuses an occupied target
 unless it is an identical, symlink-free copy from that bundle; it never provides a force-overwrite
 mode. `all` preflights every target before changing any of them and restores prior states if a
 handled installation command fails.
-
-This is compensated rollback, not crash-safe storage: `SIGKILL`, power loss, and unsupported
-concurrent changes remain outside the installer contract.
 
 For a routine local refresh of both platforms, run:
 
