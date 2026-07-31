@@ -1,0 +1,23 @@
+Complete this task carefully. Inspect the repository, make the smallest correct change, add or
+update relevant tests, run verification, review the diff, and commit locally.
+
+Task: prevent `scripts/build-bundles.sh` from writing through a symbolic-link output parent.
+
+Required behaviour:
+- When the lexical parent of `OUTPUT_DIRECTORY` (that is, `dirname OUTPUT_DIRECTORY`) is a
+  symbolic link, `bash scripts/build-bundles.sh OUTPUT_DIRECTORY` must fail before `mktemp` or
+  any other write.
+- It must exit nonzero, write no stdout, and write exactly
+  `ERROR: output parent must not be a symbolic link: <parent>` followed by a newline to stderr,
+  where `<parent>` is that lexical parent string.
+- The existing real-parent bundle behaviour, including its existing output-already-exists
+  rejection, must remain unchanged.
+- Add regression coverage proving that a symbolic link whose target is an empty directory leaves
+  that target with neither bundle output nor staging content.
+
+Constraints:
+- Change only `scripts/build-bundles.sh` and `tests/test_bundles.sh`.
+- Work only in this assigned worktree.
+- Do not use network, `git push`, `gh`, pull requests, merges, deployment, or real user
+  installation paths.
+- Commit locally when complete.

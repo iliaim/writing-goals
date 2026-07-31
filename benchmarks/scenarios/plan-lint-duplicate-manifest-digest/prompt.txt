@@ -1,0 +1,22 @@
+Complete this task carefully. Inspect the repository, make the smallest correct change, add or
+update relevant tests, run verification, review the diff, and commit locally.
+
+Task: make `scripts/plan-lint.sh` reject ambiguous manifest digest bindings.
+
+Required behaviour:
+- A manifest must contain exactly one JSON key named `plan_digest`, whose value keeps the existing
+  `sha256:<64 lowercase hexadecimal characters>` form and binds the exact plan bytes.
+- A manifest with multiple `plan_digest` keys must be rejected before any success result, with no
+  stdout and exactly `plan-lint: manifest must contain exactly one plan_digest` followed by a
+  newline on stderr.
+- Preserve acceptance of the current valid fixture and all current rejection behaviour.
+- Keep the linter structural only: do not add prose or semantic quality judgement.
+- Add a duplicate-manifest-digest fixture and exercise it from `tests/test_plan_lint.sh`.
+
+Constraints:
+- Change only `scripts/plan-lint.sh`, `tests/test_plan_lint.sh`, and new or changed files below
+  `tests/fixtures/plan-lint/`.
+- Work only in this assigned worktree.
+- Do not use network, `git push`, `gh`, pull requests, merges, deployment, or real user
+  installation paths.
+- Commit locally when complete.
