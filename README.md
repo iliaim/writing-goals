@@ -293,6 +293,65 @@ Unattended work requires an OS-level sandbox, least privilege, read-only mounts 
 workspace, restricted egress, explicit budgets, protected gate state, and a kill path. See the
 [Security model](docs/security-model.md) and [`shared/autonomy.md`](shared/autonomy.md).
 
+## Maintainer benchmark harness
+
+The repository includes a local, unshipped benchmark harness under `benchmarks/`. It compares a
+frozen scenario across profiles while retaining separate worktrees, temporary homes, JSON event
+logs, an immutable run manifest, and an independently executed scenario evaluator. Codex is the
+only implemented adapter today; the profile schema separates `host`, `model`, and `workflow` so a
+Claude adapter or an alternative workflow can be added without changing scenario or evaluator
+contracts.
+
+Before any run, prepare one explicit, tab-separated 12-row cohort ledger outside tracked content
+(normally under `.archive/`). It freezes the cohort ID, base commit, profile/prompt/evaluator/adapter
+hashes, three scenario IDs, both arms, two repetitions, the interleaved order `1` through `12`, a
+per-run timeout from 1 to 3,600 seconds, and one operator-action code: `none`, `operator-aborted`, or
+`environment-repaired`. A ledger is deliberately not generated automatically: its purpose is to
+make the planned inputs and order reviewable before either arm starts.
+
+Start with a safe dry run against one row in that ledger:
+
+```bash
+bash benchmarks/run.sh \
+  --ledger .archive/benchmarks/cohort.tsv \
+  --profile benchmarks/profiles/codex-control.conf \
+  --scenario benchmarks/scenarios/refresh-status \
+  --run-id control-smoke \
+  --dry-run
+```
+
+`--execute` creates a retained local benchmark worktree beneath `.archive/benchmarks/` and invokes
+`codex exec` with the profile's declared model. It requires a clean source checkout and stops an
+agent that exceeds its ledger timeout; the retained result records a fixed disposition, acceptance,
+stage, exit detail, and elapsed milliseconds. Runs are unattended (`approval_policy=never`) but
+fixed to Codex's `workspace-write` sandbox: the harness does not expose a bypass or full-access
+option. A worktree is not a security boundary, so use an OS-level sandbox for stronger containment.
+Credentials are never retained in benchmark evidence; a caller may supply a regular
+`WG_CODEX_AUTH_SOURCE` file, which is copied only to an ephemeral Codex home and deleted when the
+run ends. Sensitive values from that JSON file are checked against the retained logs and worktree;
+any match discards the entire run rather than retaining secret-bearing evidence.
+
+After all 12 declared rows have terminal evidence, aggregate only that exact ledger and run root:
+
+```bash
+bash benchmarks/aggregate.sh \
+  --ledger .archive/benchmarks/cohort.tsv \
+  --run-root .archive/benchmarks
+```
+
+Aggregation rejects missing, duplicate, or mismatched evidence rather than guessing from the latest
+directory. It reports independently verified acceptance, elapsed time, operator-action code,
+paired outcome, and two-repeat consistency. Twelve runs are descriptive feasibility evidence, not
+a statistically reliable claim that one workflow is better. The evaluators are separate post-agent
+processes, but are not hidden from the candidate; the results are therefore not a protected
+held-out evaluation.
+
+The initial cohort uses only deterministic hard gates. A future scenario may add a task-specific
+qualitative rubric only after its hard gate passes and a separately approved human calibration; it
+cannot turn a failed run into a pass. An invalid pair, non-pass, or discordant paired acceptance is
+an RCA trigger: retain one short evidence-linked note in `.archive/`, do not retry or change results
+automatically, and seek separate authorization for any one-hypothesis follow-up.
+
 ## Documentation
 
 - [Quick start](docs/quickstart.md) — install, invoke, update, and remove the source distribution
@@ -319,6 +378,7 @@ workspace, restricted egress, explicit budgets, protected gate state, and a kill
 | [`tests/`](tests/) | Portable installer, gate, policy, and documentation contracts |
 | [`scripts/build-bundles.sh`](scripts/build-bundles.sh) | Deterministic portable bundle builder |
 | [`scripts/refresh-local.sh`](scripts/refresh-local.sh) | Explicit, tested local refresh with backups |
+| [`benchmarks/`](benchmarks/) | Maintainer-only reusable, provider-neutral benchmark harness |
 | [`install.sh`](install.sh) | Bundle-local copy installer |
 
 ## Verify this checkout
