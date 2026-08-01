@@ -7,7 +7,7 @@ okf_version: "0.2"
 **Give Claude Code and Codex a finish line they can prove.**
 
 [![CI](https://github.com/iliaim/writing-goals/actions/workflows/ci.yml/badge.svg)](https://github.com/iliaim/writing-goals/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/license-MIT-1d4ed8.svg)](LICENSE)
 [![Platforms: Claude Code and Codex](https://img.shields.io/badge/platforms-Claude%20Code%20%2B%20Codex-4f46e5.svg)](#platform-support)
 [![Bash 3.2+](https://img.shields.io/badge/bash-3.2%2B-555.svg)](#build-and-install)
 
