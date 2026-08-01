@@ -22,6 +22,9 @@ that release.
 - Structured issue forms and a pull request evidence template.
 - GitHub-native workflow diagram and public support matrix.
 - Private vulnerability reporting and discoverable repository description and topics.
+- Documentation contract binding the installer selections advertised in the README and the quick
+  start to the selections `install.sh` actually accepts, checked in both directions so neither a
+  stale duplicated command nor an undocumented new selection can merge.
 
 ### Fixed
 
