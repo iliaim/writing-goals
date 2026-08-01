@@ -72,8 +72,8 @@ bounded retry; invalid state or an exhausted limit stops for a human.
 
 The separation is the point. A maker can announce success, but the announcement never advances the
 goal — only a rerun of the pre-written command does, and its raw output is what gets retained.
-Investigation and contract authoring come before either role is assigned, so the first two steps
-sit outside both lanes.
+Investigation and contract authoring come before either role is assigned, so they sit outside both
+lanes.
 
 ## Why it exists
 
@@ -153,7 +153,7 @@ request.
 
 | Use a goal when | Skip it when |
 |---|---|
-| Work is multi-turn or will run unattended | A small one-shot edit needs less coordination than a goal adds |
+| Work is multi-turn or will run unattended | A small one-shot edit is one where a goal adds more coordination than value |
 | Completion has an observable end state worth enforcing | The desired outcome is still unknown and the work is exploratory |
 | A migration, refactor, or feature splits into verifiable slices | There is no meaningful verification surface |
 | Another agent or deterministic process must independently confirm the result | An irreversible decision, production change, or external send lacks explicit human authorization |
@@ -223,8 +223,9 @@ bash dist/writing-goals/install.sh codex
 bash dist/writing-goals/install.sh all
 ```
 
-Transactional `all` installation uses compensated rollback, not crash-safe storage: `SIGKILL`,
-power loss, and unsupported concurrent changes remain outside the installer contract.
+Installation uses compensated rollback, not crash-safe storage: `SIGKILL`, power loss, and
+unsupported concurrent changes remain outside the installer contract. This applies to every
+selection, not only `all`.
 
 <details>
 <summary><b>Install targets, collision rules, update, and local refresh</b></summary>
@@ -253,13 +254,17 @@ unrelated skills and agents.
 ## Deterministic gate
 
 The gate is optional for interactive goal writing and required for unattended execution. It turns
-the acceptance command into a Stop-hook decision with exactly three outcomes:
+the acceptance command into a Stop-hook decision with three normal outcomes:
 
 | Gate result | The hook emits | What happens next |
 |---|---|---|
 | Green | nothing, and exits `0` | The agent may stop; attempt state is cleared |
 | Red, below the cap | `{"decision":"block","reason":...}` | One more bounded iteration is requested |
 | Red at the cap, or invalid configuration or state | `{"continue":false,"stopReason":...}` | Terminal needs-human outcome |
+
+Before those three, the adapter fails closed on its own preconditions: a missing `jq` or unparseable
+hook input exits `2` with a message on standard error and no JSON, because the terminal payload is
+itself built with `jq`.
 
 Failing command output is stored in a session-keyed, mode-0600 state log rather than returned to
 the model.
