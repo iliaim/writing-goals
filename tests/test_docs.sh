@@ -109,6 +109,54 @@ assert_file_contains "$REPO_DIR/docs/quickstart.md" 'refresh-local\.sh.*--instal
 assert_file_contains "$REPO_DIR/docs/quickstart.md" '\.archive/writing-goals' 'quick start documents the repository-local refresh archive'
 assert_file_contains "$REPO_DIR/docs/quickstart.md" '/writing-goals' 'quick start documents Claude invocation'
 assert_file_contains "$REPO_DIR/docs/quickstart.md" '\$writing-goals' 'quick start documents Codex invocation'
+
+# The installer invocation is the public entry point and is duplicated across the
+# README and the quick start, which nothing previously bound together.  Every
+# other assertion here is a presence check: it proves a pinned string exists, not
+# that the documented command still matches the code.  So derive the accepted
+# selections from install.sh and check both directions instead of pinning a
+# literal, which would drift with the very code it claims to document.
+installer_selections="$(sed -n 's/^case "$selection" in \([^)]*\)).*/\1/p' "$REPO_DIR/install.sh" | head -1)"
+
+TEST_COUNT=$((TEST_COUNT + 1))
+if [ -n "$installer_selections" ]; then
+  pass 'installer selection set is discoverable for documentation binding'
+else
+  fail 'installer selection set is discoverable for documentation binding'
+fi
+
+assert_file_contains "$readme" 'dist/writing-goals/install\.sh' 'README documents the bundle installer invocation'
+assert_file_contains "$REPO_DIR/docs/quickstart.md" 'dist/writing-goals/install\.sh' 'quick start documents the bundle installer invocation'
+
+# Forward: every selection install.sh accepts is documented for the reader.
+while read -r installer_selection; do
+  [ -n "$installer_selection" ] || continue
+  assert_file_contains "$readme" "install\.sh $installer_selection" \
+    "README documents the $installer_selection installer selection"
+done <<< "$(printf '%s\n' "$installer_selections" | tr '|' '\n')"
+
+# Reverse: every selection the documentation advertises is one install.sh still
+# accepts.  This is the direction that catches a stale duplicated block.
+documented_selections="$(grep -Eho 'dist/writing-goals/install\.sh [A-Za-z0-9_-]+' \
+  "$readme" "$REPO_DIR/docs/quickstart.md" | awk '{ print $2 }' | sort -u)"
+
+TEST_COUNT=$((TEST_COUNT + 1))
+if [ -n "$documented_selections" ]; then
+  pass 'documented installer invocations are discoverable in README and quick start'
+else
+  fail 'documented installer invocations are discoverable in README and quick start'
+fi
+
+while read -r documented_selection; do
+  [ -n "$documented_selection" ] || continue
+  TEST_COUNT=$((TEST_COUNT + 1))
+  if printf '%s' "|$installer_selections|" | grep -Fq -- "|$documented_selection|"; then
+    pass "documented installer selection $documented_selection is accepted by install.sh"
+  else
+    fail "documented installer selection $documented_selection is accepted by install.sh (accepts $installer_selections)"
+  fi
+done <<< "$documented_selections"
+
 assert_file_contains "$REPO_DIR/docs/examples.md" 'Done when:|Done when ' 'examples include a completion contract'
 assert_file_contains "$REPO_DIR/docs/examples.md" 'raw output|exit code' 'examples require reproducible evidence'
 assert_file_contains "$REPO_DIR/docs/security-model.md" 'OS-level sandbox' 'security model names the real unattended boundary'
