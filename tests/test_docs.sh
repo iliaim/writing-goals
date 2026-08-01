@@ -157,6 +157,50 @@ while read -r documented_selection; do
   fi
 done <<< "$documented_selections"
 
+# scripts/refresh-local.sh is the documented update path and carries the same
+# risk as install.sh above: the documentation names a selection, and only the
+# script knows which selections are real.
+#
+# The forward direction deliberately does NOT apply here.  README and the quick
+# start show the one recommended `--install all` invocation rather than
+# enumerating every accepted selection, so requiring each accepted selection to
+# appear in the prose would fight the documents' intent rather than protect the
+# reader.  Bind the reverse direction instead, plus the two safety properties
+# the surrounding prose actually claims: that --install is a real flag, and that
+# the script refuses to touch installed copies without it.
+refresh_script="$REPO_DIR/scripts/refresh-local.sh"
+refresh_selections="$(sed -n 's/^case "$selection" in \([^)]*\)).*/\1/p' "$refresh_script" | head -1)"
+
+TEST_COUNT=$((TEST_COUNT + 1))
+if [ -n "$refresh_selections" ]; then
+  pass 'refresh selection set is discoverable for documentation binding'
+else
+  fail 'refresh selection set is discoverable for documentation binding'
+fi
+
+assert_file_contains "$refresh_script" '^  --install\)' 'refresh script implements the documented --install flag'
+assert_file_contains "$refresh_script" 'explicit --install is required' 'refresh script refuses to run without the documented explicit flag'
+
+documented_refresh="$(grep -Eho 'refresh-local\.sh --install [A-Za-z0-9_-]+' \
+  "$readme" "$REPO_DIR/docs/quickstart.md" | awk '{ print $3 }' | sort -u)"
+
+TEST_COUNT=$((TEST_COUNT + 1))
+if [ -n "$documented_refresh" ]; then
+  pass 'documented refresh invocations are discoverable in README and quick start'
+else
+  fail 'documented refresh invocations are discoverable in README and quick start'
+fi
+
+while read -r refresh_selection; do
+  [ -n "$refresh_selection" ] || continue
+  TEST_COUNT=$((TEST_COUNT + 1))
+  if printf '%s' "|$refresh_selections|" | grep -Fq -- "|$refresh_selection|"; then
+    pass "documented refresh selection $refresh_selection is accepted by refresh-local.sh"
+  else
+    fail "documented refresh selection $refresh_selection is accepted by refresh-local.sh (accepts $refresh_selections)"
+  fi
+done <<< "$documented_refresh"
+
 assert_file_contains "$REPO_DIR/docs/examples.md" 'Done when:|Done when ' 'examples include a completion contract'
 assert_file_contains "$REPO_DIR/docs/examples.md" 'raw output|exit code' 'examples require reproducible evidence'
 assert_file_contains "$REPO_DIR/docs/security-model.md" 'OS-level sandbox' 'security model names the real unattended boundary'

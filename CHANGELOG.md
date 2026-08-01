@@ -25,6 +25,9 @@ that release.
 - Documentation contract binding the installer selections advertised in the README and the quick
   start to the selections `install.sh` actually accepts, checked in both directions so neither a
   stale duplicated command nor an undocumented new selection can merge.
+- Documentation contract for the local refresh path, binding the selection the docs advertise to the
+  selections `scripts/refresh-local.sh` accepts, and binding the documented explicit-flag safety to
+  the script that enforces it.
 
 ### Fixed
 
