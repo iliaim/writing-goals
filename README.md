@@ -7,14 +7,73 @@ okf_version: "0.2"
 **Give Claude Code and Codex a finish line they can prove.**
 
 [![CI](https://github.com/iliaim/writing-goals/actions/workflows/ci.yml/badge.svg)](https://github.com/iliaim/writing-goals/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/license-MIT-1d4ed8.svg)](LICENSE)
+[![Platforms: Claude Code and Codex](https://img.shields.io/badge/platforms-Claude%20Code%20%2B%20Codex-4f46e5.svg)](#platform-support)
+[![Bash 3.2+](https://img.shields.io/badge/bash-3.2%2B-555.svg)](#build-and-install)
 
 `writing-goals` turns open-ended agent work into bounded goal contracts with exact acceptance
 checks, independent verification, and explicit limits on retries, time, and cost. The core method
 is platform-neutral; this repository currently ships tested Claude Code and Codex adapters.
 
-The core rule is simple: **the maker does not certify its own completion.** A fresh checker must
-be able to rerun the same acceptance command and reach the same result.
+> [!IMPORTANT]
+> **The maker does not certify its own completion.** A fresh checker must be able to rerun the
+> same acceptance command and reach the same result.
+
+**New here?** [Install guide](docs/quickstart.md) · [Worked example](#worked-example) ·
+[Security model](docs/security-model.md)
+
+## How it works
+
+Two roles, one pre-written check, and stop rules that are decided before implementation starts.
+
+```mermaid
+flowchart TD
+    accTitle: Goal execution loop
+    accDescr {
+      Intent leads to investigation and a written goal contract. A maker implements one slice.
+      A fresh checker reruns the exact acceptance command. Green completes with retained raw
+      output and exit code. Red within remaining limits returns to the maker. Invalid state or
+      a reached stop rule needs a human.
+    }
+    A(["Intent"]) --> B["Investigate<br/>real commands, tests, CI, working tree"]
+    B --> C["Write the goal contract<br/>outcome · scope · evidence · stop rules"]
+
+    subgraph maker ["MAKER — may change code"]
+        D["Implement one slice"]
+    end
+
+    subgraph checker ["FRESH CHECKER — may not change code"]
+        E{"Rerun the exact<br/>acceptance command"}
+    end
+
+    C --> D
+    D --> E
+    E -->|green| F(["Complete<br/>raw output and exit code retained"])
+    E -->|"red, limits remain"| D
+    E -->|"invalid state, or a<br/>stop rule is reached"| G(["Needs human"])
+
+    style maker stroke:#6366f1,stroke-width:2px
+    style checker stroke:#b45309,stroke-width:2px
+    classDef entry fill:#f1f5f9,stroke:#94a3b8,color:#0f172a
+    classDef step fill:#eef2ff,stroke:#818cf8,color:#312e81
+    classDef check fill:#fef3c7,stroke:#f59e0b,color:#78350f
+    classDef done fill:#dcfce7,stroke:#22c55e,color:#14532d
+    classDef halt fill:#fee2e2,stroke:#ef4444,color:#7f1d1d
+    class A entry
+    class B,C,D step
+    class E check
+    class F done
+    class G halt
+```
+
+In text: investigate the real repository, define one observable outcome and its check, let the
+maker implement it, then have a fresh checker rerun the exact command. A failure may trigger a
+bounded retry; invalid state or an exhausted limit stops for a human.
+
+The separation is the point. A maker can announce success, but the announcement never advances the
+goal — only a rerun of the pre-written command does, and its raw output is what gets retained.
+Investigation and contract authoring come before either role is assigned, so they sit outside both
+lanes.
 
 ## Why it exists
 
@@ -27,21 +86,6 @@ Ordinary prompts describe work, but they rarely define a trustworthy end state:
 | Retries can stop early or continue indefinitely | Success, failure, iteration, time, and cost stops are explicit |
 | A green build may be treated as proof of behavior | Verification surfaces are ranked and weak proxies are named |
 | A hook may be mistaken for containment | Trust boundaries and OS isolation remain explicit |
-
-```mermaid
-flowchart LR
-    A["Intent"] --> B["Investigate repository"]
-    B --> C["Write bounded goal contract"]
-    C --> D["Maker implements"]
-    D --> E["Fresh checker reruns exact acceptance command"]
-    E -->|Pass| F["Complete with evidence"]
-    E -->|Fail below limits| D
-    E -->|Invalid state or limit reached| G["Needs human"]
-```
-
-In text: investigate the real repository, define one observable outcome and its check, let the
-maker implement it, then have a fresh checker rerun the exact command. A failure may trigger a
-bounded retry; invalid state or an exhausted limit stops for a human.
 
 ## Worked example
 
@@ -63,6 +107,18 @@ Stop:          success = both checks pass
                max_wall_clock = 45 minutes
 ```
 
+The checker then returns evidence a third party can re-derive, not a summary:
+
+```console
+$ bash tests/auth/run.sh; echo "exit=$?"
+...
+PASS: 12 scenarios
+exit=0
+$ bash tests/run.sh; echo "exit=$?"
+...
+exit=0
+```
+
 The exact paths and commands must come from the target repository. An agent must investigate
 rather than copy this example blindly. See [Examples](docs/examples.md) for complete patterns and
 anti-patterns.
@@ -82,17 +138,12 @@ bash dist/writing-goals/install.sh codex
 bash dist/writing-goals/install.sh claude
 ```
 
-In Codex:
+Then invoke it in either host:
 
-```text
-$writing-goals Turn this migration into a bounded, verifiable goal.
-```
-
-In Claude Code:
-
-```text
-/writing-goals Turn this migration into a bounded, verifiable goal.
-```
+| Host | Invoke |
+|---|---|
+| Claude Code | `/writing-goals Turn this migration into a bounded, verifiable goal.` |
+| Codex | `$writing-goals Turn this migration into a bounded, verifiable goal.` |
 
 The Codex `/skills` picker and description-based invocation are also supported. Start with the
 [Quick start](docs/quickstart.md) for installation, updating, uninstalling, and a first real
@@ -100,28 +151,19 @@ request.
 
 ## When to use it
 
-Use a goal when:
+| Use a goal when | Skip it when |
+|---|---|
+| Work is multi-turn or will run unattended | A small one-shot edit is one where a goal adds more coordination than value |
+| Completion has an observable end state worth enforcing | The desired outcome is still unknown and the work is exploratory |
+| A migration, refactor, or feature splits into verifiable slices | There is no meaningful verification surface |
+| Another agent or deterministic process must independently confirm the result | An irreversible decision, production change, or external send lacks explicit human authorization |
 
-- work is multi-turn or will run unattended;
-- completion has an observable end state worth enforcing;
-- a migration, refactor, or feature can be split into verifiable slices; or
-- another agent or deterministic process must independently confirm the result.
+> [!WARNING]
+> This repository is not a sandbox, scheduler, autonomous DAG runner, or substitute for product
+> decisions. The host owns the bounded, sequential execution protocol; public documentation does
+> not create a separate continuation mechanism. Separate continuation mechanisms are out of scope.
 
-Skip it for:
-
-- a small one-shot edit where a goal adds more coordination than value;
-- exploratory work whose desired outcome is still unknown;
-- work with no meaningful verification surface; or
-- irreversible decisions, production changes, or external sends that lack explicit human
-  authorization.
-
-This repository is not a sandbox, scheduler, autonomous DAG runner, or substitute for product
-decisions. The host owns the bounded, sequential execution protocol; public documentation does
-not create a separate continuation mechanism. Separate continuation mechanisms are out of scope.
-
-## How it works
-
-The canonical method has six stages:
+## The method in six stages
 
 1. **Triage** whether a goal is useful.
 2. **Investigate** repository guidance, implementation, tests, CI, and the working tree.
@@ -134,12 +176,18 @@ The canonical method has six stages:
 [`shared/method.md`](shared/method.md) is the canonical policy. The README and guides summarize
 reader journeys and link to it; they do not replace it.
 
+## Execution and state boundaries
+
 Execution follows the canonical [Workflow contract](shared/workflow.md): each protected
 checkpoint is verified before checkpoint-then-continue proceeds to the recorded successor.
 There is no parallel continuation path.
 
-Approved execution may make **automatic local commits**. The v1 boundary is that all v1 state remains local; this accepts
-the single-machine risk rather than claiming durable recovery. GitHub Issues are a future, non-authoritative collaboration projection; Projects share that boundary. One post-G13 human external gate is the sole gate for external push, pull request, merge, release, or deploy; it is not a mid-plan pause.
+| Boundary | What is true today |
+|---|---|
+| Commits | Approved execution may make **automatic local commits** |
+| Durability | The v1 boundary is that all v1 state remains local; this accepts the single-machine risk rather than claiming durable recovery |
+| External actions | One post-G13 human external gate is the sole gate for external push, pull request, merge, release, or deploy; it is not a mid-plan pause |
+| Collaboration | GitHub Issues are a future, non-authoritative collaboration projection; Projects share that boundary |
 
 The Goal Ledger domain contains immutable Goal definitions and protected lifecycle records. Local
 plan and evidence artifacts are untrusted and cannot become lifecycle authority.
@@ -157,15 +205,11 @@ plan and evidence artifacts are untrusted and cannot become lifecycle authority.
 Platform hook contracts change over time. Adapter-specific claims cite current official
 documentation and are covered by repository documentation contracts.
 
-## Requirements
-
-- Bash 3.2 or newer for the installer, gates, and contract tests
-- `jq` for either lifecycle gate
-- `shasum` or `sha256sum` for verification-surface hashing
-
-No language package manager is required.
-
 ## Build and install
+
+Requirements: Bash 3.2 or newer for the installer, gates, and contract tests; `jq` for either
+lifecycle gate; and `shasum` or `sha256sum` for verification-surface hashing. No language package
+manager is required.
 
 The bundle builder creates a deterministic, self-contained, symlink-free copy. Build it into an
 otherwise absent output directory, then run the installer shipped inside that bundle:
@@ -179,14 +223,18 @@ bash dist/writing-goals/install.sh codex
 bash dist/writing-goals/install.sh all
 ```
 
+Installation uses compensated rollback, not crash-safe storage: `SIGKILL`, power loss, and
+unsupported concurrent changes remain outside the installer contract. This applies to every
+selection, not only `all`.
+
+<details>
+<summary><b>Install targets, collision rules, update, and local refresh</b></summary>
+
 Claude is installed at `~/.claude/skills/writing-goals`; Codex at
 `${CODEX_HOME:-$HOME/.codex}/skills/writing-goals`. A normal install refuses an occupied target
 unless it is an identical, symlink-free copy from that bundle; it never provides a force-overwrite
 mode. `all` preflights every target before changing any of them and restores prior states if a
 handled installation command fails.
-
-This is compensated rollback, not crash-safe storage: `SIGKILL`, power loss, and unsupported
-concurrent changes remain outside the installer contract.
 
 For a routine local refresh of both platforms, run:
 
@@ -201,11 +249,28 @@ contract suite, builds a new bundle, and saves only the replaced writing-goals t
 explicit `--install` flag is required; the command never updates in the background or touches
 unrelated skills and agents.
 
+</details>
+
 ## Deterministic gate
 
-The gate is optional for interactive goal writing and required for unattended execution. Copy the
-platform script into the target repository, make it executable, and configure all three inputs in
-the environment that launches the agent:
+The gate is optional for interactive goal writing and required for unattended execution. It turns
+the acceptance command into a Stop-hook decision with three normal outcomes:
+
+| Gate result | The hook emits | What happens next |
+|---|---|---|
+| Green | nothing, and exits `0` | The agent may stop; attempt state is cleared |
+| Red, below the cap | `{"decision":"block","reason":...}` | One more bounded iteration is requested |
+| Red at the cap, or invalid configuration or state | `{"continue":false,"stopReason":...}` | Terminal needs-human outcome |
+
+Before those three, the adapter fails closed on its own preconditions: a missing `jq` or unparseable
+hook input exits `2` with a message on standard error and no JSON, because the terminal payload is
+itself built with `jq`.
+
+Failing command output is stored in a session-keyed, mode-0600 state log rather than returned to
+the model.
+
+Copy the platform script into the target repository, make it executable, and configure all three
+inputs in the environment that launches the agent:
 
 ```bash
 export GATE_CMD='bash tests/run.sh'       # trusted, deterministic, non-mutating
@@ -217,15 +282,17 @@ export GATE_SURFACE='tests/*.sh'          # mandatory repo-relative shell glob/l
 input. `GATE_SURFACE` uses whitespace-separated shell words and cannot represent filenames
 containing whitespace. Every expansion must resolve to a regular file.
 
-The stored digest only detects changes after a **trusted baseline** exists. The currently
-supported setup makes the complete verification surface read-only to the maker before work
-starts. A trusted orchestrator can establish the first digest only by invoking the hook with the
-exact same session payload and state key before maker edits. The scripts have no prime-only
-interface, so manual or pre-session priming is not reliable. Keeping gate state outside the
-repository is not sufficient by itself; sandbox permissions must prevent the maker from altering
-it.
+> [!WARNING]
+> The stored digest only detects changes after a **trusted baseline** exists. The currently
+> supported setup makes the complete verification surface read-only to the maker before work
+> starts. A trusted orchestrator can establish the first digest only by invoking the hook with the
+> exact same session payload and state key before maker edits. The scripts have no prime-only
+> interface, so manual or pre-session priming is not reliable. Keeping gate state outside the
+> repository is not sufficient by itself; sandbox permissions must prevent the maker from altering
+> it.
 
-For Claude Code:
+<details>
+<summary><b>Register the Stop hook in Claude Code</b></summary>
 
 ```bash
 mkdir -p .claude/hooks
@@ -252,7 +319,10 @@ Claude normally overrides a Stop hook after eight consecutive blocks without pro
 `GOAL_GATE_CAP <= 8` unless `CLAUDE_CODE_STOP_HOOK_BLOCK_CAP` is deliberately raised to at least
 the same value.
 
-For Codex:
+</details>
+
+<details>
+<summary><b>Register the Stop hook in Codex</b></summary>
 
 ```bash
 mkdir -p .codex/hooks
@@ -275,25 +345,29 @@ Register it with an absolute path in `.codex/hooks.json`, then review and trust 
 }
 ```
 
-On a red check below the cap, either adapter emits `{"decision":"block",...}` and requests another
-iteration. A green check exits cleanly with no JSON. Invalid configuration or state, and a red
-check at the cap, are terminal needs-human outcomes emitted as
-`{"continue":false,"stopReason":...}`. Failing command output is stored in a session-keyed,
-mode-0600 state log rather than returned to the model.
+</details>
 
 Read [`shared/gates.md`](shared/gates.md) before using the lifecycle gate.
 
 ## Safety boundary
 
-The Stop hook and [`assets/deny-list.sh`](assets/deny-list.sh) are defense in depth for a
-cooperative agent's mistakes. They are **not a security boundary** and do not contain a hostile
-or prompt-injected process.
+> [!CAUTION]
+> The Stop hook and [`assets/deny-list.sh`](assets/deny-list.sh) are defense in depth for a
+> cooperative agent's mistakes. They are **not a security boundary** and do not contain a hostile
+> or prompt-injected process.
 
 Unattended work requires an OS-level sandbox, least privilege, read-only mounts outside the
 workspace, restricted egress, explicit budgets, protected gate state, and a kill path. See the
 [Security model](docs/security-model.md) and [`shared/autonomy.md`](shared/autonomy.md).
 
 ## Maintainer benchmark harness
+
+> [!NOTE]
+> This section is for maintainers of this repository. The harness under `benchmarks/` is local and
+> unshipped; installing an adapter neither installs nor runs it.
+
+<details>
+<summary><b>Cohort ledger, execution, and aggregation</b></summary>
 
 The repository includes a local, unshipped benchmark harness under `benchmarks/`. It compares a
 frozen scenario across profiles while retaining separate worktrees, temporary homes, JSON event
@@ -352,21 +426,36 @@ cannot turn a failed run into a pass. An invalid pair, non-pass, or discordant p
 an RCA trigger: retain one short evidence-linked note in `.archive/`, do not retry or change results
 automatically, and seek separate authorization for any one-hypothesis follow-up.
 
+</details>
+
+## Verify this checkout
+
+Run the same portable contract suite used by CI on macOS and Ubuntu:
+
+```bash
+bash tests/run.sh
+```
+
+CI also runs ShellCheck on Ubuntu.
+
 ## Documentation
 
-- [Quick start](docs/quickstart.md) — install, invoke, update, and remove the source distribution
-- [Examples](docs/examples.md) — well-formed contracts, anti-patterns, and evidence
-- [Security model](docs/security-model.md) — threat model, boundaries, and operational controls
-- [Canonical method](shared/method.md) — the platform-neutral contract
-- [Goal authoring](shared/author-goal.md) — anatomy and templates
-- [Deterministic gates](shared/gates.md) — lifecycle verification
-- [Goal chaining](shared/chaining.md) — shallow persisted DAGs
-- [Autonomy policy](shared/autonomy.md) — action classes and unattended controls
-- [Workflow contract](shared/workflow.md) — protected sequential activation and continuation
-- [Publication](shared/publication.md) — local commits and the final external-action boundary
-- [As-built record](PLAN.md) — architecture, compatibility, and design decisions
+| Guide | Read it for |
+|---|---|
+| [Quick start](docs/quickstart.md) | Install, invoke, update, and remove the source distribution |
+| [Examples](docs/examples.md) | Well-formed contracts, anti-patterns, and evidence |
+| [Security model](docs/security-model.md) | Threat model, boundaries, and operational controls |
+| [Canonical method](shared/method.md) | The platform-neutral contract |
+| [Goal authoring](shared/author-goal.md) | Anatomy and templates |
+| [Deterministic gates](shared/gates.md) | Lifecycle verification |
+| [Goal chaining](shared/chaining.md) | Shallow persisted DAGs |
+| [Autonomy policy](shared/autonomy.md) | Action classes and unattended controls |
+| [Workflow contract](shared/workflow.md) | Protected sequential activation and continuation |
+| [Publication](shared/publication.md) | Local commits and the final external-action boundary |
+| [As-built record](PLAN.md) | Architecture, compatibility, and design decisions |
 
-## Repository map
+<details>
+<summary><b>Repository map</b></summary>
 
 | Path | Purpose |
 |---|---|
@@ -381,24 +470,12 @@ automatically, and seek separate authorization for any one-hypothesis follow-up.
 | [`benchmarks/`](benchmarks/) | Maintainer-only reusable, provider-neutral benchmark harness |
 | [`install.sh`](install.sh) | Bundle-local copy installer |
 
-## Verify this checkout
-
-Run the same portable contract suite used by CI on macOS and Ubuntu:
-
-```bash
-bash tests/run.sh
-```
-
-CI also runs ShellCheck on Ubuntu.
+</details>
 
 ## Project policies
 
-- [Contributing](CONTRIBUTING.md)
-- [Security](SECURITY.md)
-- [Support](SUPPORT.md)
-- [Code of Conduct](CODE_OF_CONDUCT.md)
-- [Changelog](CHANGELOG.md)
-- [MIT License](LICENSE)
+[Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [Support](SUPPORT.md) ·
+[Code of Conduct](CODE_OF_CONDUCT.md) · [Changelog](CHANGELOG.md) · [MIT License](LICENSE)
 
 Maintained by [iliaim](https://github.com/iliaim). Use the structured
 [issue forms](https://github.com/iliaim/writing-goals/issues/new/choose) for public documentation,
