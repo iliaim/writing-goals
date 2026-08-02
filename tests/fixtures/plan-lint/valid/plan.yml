@@ -1,23 +1,45 @@
 id: FIXTURE-PLAN
-task_class: docs_config
-requirements: [REQ-02]
 objective_acceptance: [OBJ-01]
-execution_recipe:
-  inputs: [objective_snapshot]
-  outputs: [updated-policy]
-  maker_paths: [shared/example.md]
-  oracle_paths: [tests/example.sh]
-  evidence:
-    - order: 1
-      argv: [bash, tests/example.sh]
-      expected_exit: 0
-  handoff: writing-goals-verifier
-  fan_in_owner: writing-goals-reviewer
-  risks: [duplicate-authority]
-  stop_conditions: [missing-decision]
+alternatives:
+  - option: one-file contract
+    rejected_because: full protected plan is required for this unattended fixture
 dag:
   - id: author
+    task_class: docs_config
+    evidence_route: red_to_green
+    requirements: [REQ-02]
+    objective_acceptance: [OBJ-01]
+    execution_recipe:
+      inputs: [objective_snapshot]
+      outputs: [updated-policy]
+      maker_paths: [shared/example.md]
+      oracle_paths: [tests/example.sh]
+      evidence:
+        - order: 1
+          argv: [bash, tests/example.sh]
+          expected_exit: 0
+      handoff: writing-goals-verifier
+      fan_in_owner: writing-goals-reviewer
+      risks: [duplicate-authority]
+      stop_conditions: [missing-decision]
     depends_on: []
   - id: verify
+    task_class: docs_config
+    evidence_route: red_to_green
+    requirements: [REQ-02]
+    objective_acceptance: [OBJ-01]
+    execution_recipe:
+      inputs: [updated-policy]
+      outputs: [verification-receipt]
+      maker_paths: [shared/example.md]
+      oracle_paths: [tests/example.sh]
+      evidence:
+        - order: 1
+          argv: [bash, tests/example.sh]
+          expected_exit: 0
+      handoff: writing-goals-reviewer
+      fan_in_owner: writing-goals-reviewer
+      risks: [duplicate-authority]
+      stop_conditions: [missing-decision]
     depends_on: [author]
 workflow: [discover, author, lint, challenge, freeze]

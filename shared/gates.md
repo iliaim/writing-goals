@@ -4,25 +4,27 @@ okf_version: "0.2"
 
 # Deterministic gates
 
-Platform completion signals are not deterministic verification. Real verification comes from two
-gate layers. Use both for anything unattended; see the platform adapter for current wiring.
+Platform completion signals are not deterministic verification. The lightweight tier records
+repeatable checks for human review; the full protected tier adds both gate layers below. See the
+platform adapter for current wiring.
 
-## Layer 1 — condition-level gate (lives in the goal text)
+## Lightweight verification record
 
-Force the doer to **run the check and persist or surface the raw stdout + exit code**, so a
-fresh checker can reproduce the verdict instead of trusting self-report.
+The lightweight contract names the exact acceptance command, expected pass signal, and observed
+exit/result. A reviewer can rerun it. Retain or link full output for failures and when it helps
+diagnosis; do not turn every normal contract into a log archive.
 
 - Name the **exact** command. No paraphrase.
-- Require the raw output block **and** `echo $?` (the exit code) pasted verbatim.
+- Record the expected exit/string/number and the observed exit/result.
 - **Forbid** editing, skipping, `xfail`-ing, or deleting the verification surface to reach green.
-- Limits: this is still the *maker* surfacing its own evidence. Better than a bare claim,
-  but the model chooses what to paste — not sufficient for an unwatched loop.
+- A result recorded by the maker is review evidence, not a lifecycle decision.
 
-## Layer 2 — lifecycle verification gate (the real maker ≠ checker)
+## Full-tier lifecycle gate (the real maker ≠ checker)
 
 A trusted lifecycle script runs the command in a fresh process, independent of anything the
 doer says. The checker is now code, not the maker — the true maker/checker separation.
-Required for every unattended permission mode.
+Required for every full-tier run. OS-level isolation requirements remain specific to unattended
+permission modes.
 
 ## Mandatory iteration counter (bound the strongest gate)
 
@@ -37,8 +39,9 @@ Bound it with a **persisted counter** — and put that counter **out of the agen
 - A missing counter initializes at zero. **Fail closed on unreadable, malformed, or unwritable
   state:** stop the loop and escalate to a human (needs-human), never continue unbounded.
   The configured cap plus sandbox-protected state is the real bound.
-- Require an explicit trusted `GATE_CMD`, an explicit positive `GOAL_GATE_CAP`, and a non-empty
-  `GATE_SURFACE`. There is no implicit test command and no default cap.
+- Require an explicit trusted `GATE_CMD`, an explicit positive `GOAL_GATE_CAP`, a non-empty
+  `GATE_SURFACE`, protected `GATE_AUTHORITY`, and its `GATE_PREFLIGHT_RECORD`. There is no
+  implicit test command, default cap, or maker-created baseline.
 
 ## Protect the verification surface
 
@@ -49,13 +52,11 @@ regular file. Unmatched patterns therefore fail; filenames containing whitespace
 representable by this interface. Absolute words follow shell semantics but are outside the
 supported configuration contract.
 
-The stored surface digest detects changes only **after a trusted baseline exists**. The currently
-supported safe setup is to make the complete verification surface read-only to the maker before
-work starts. A trusted orchestrator may establish the first digest only if it invokes the hook
-with the exact same session payload and therefore the same session-keyed state before maker edits.
-The scripts expose no separate prime-only interface. Manual or pre-session priming is not
-reliable because it may create a different state key. Never let the maker's first post-edit hook
-invocation silently establish the accepted baseline.
+The full-tier host must make the complete verification surface read-only to the maker and provide
+the gate a mode-0600 `GATE_PREFLIGHT_RECORD` inside `GATE_AUTHORITY`. The record binds objective,
+plan, a `sha256:` verification-surface digest, and `baseline=green`; the scripts validate it and
+compare the current surface before they persist session state. A missing or mismatched record is
+terminal; the maker's first post-edit hook invocation never creates an accepted baseline.
 
 ## Keep verifiers tiny — run → compare → block/allow
 
@@ -70,8 +71,8 @@ The verifier does exactly three things: **run** the command, **read** its exit c
   never suggest weakening the check.
 
 Ready-made platform adapters are `assets/gate.claude.sh` and `assets/gate.codex.sh`. Copy the
-relevant script into the platform lifecycle location, make it executable, configure all three
-mandatory inputs, and use the skill adapter's current wiring.
+applicable script into the platform lifecycle location, make it executable, configure every
+mandatory input, and use the skill adapter's current wiring.
 
 ## Pair with a pre-use deny-list — a backstop, not a boundary
 

@@ -17,15 +17,42 @@ assert_terminal_json() {
   fi
 }
 
+write_preflight_record() {
+  local root="$1" surface="$2" authority="$3" digest
+  digest="$(surface_digest "$root" "$surface" || true)"
+  mkdir -p "$authority"
+  chmod 700 "$authority"
+  { printf 'objective_digest=sha256:%064d\n' 1
+    printf 'plan_digest=sha256:%064d\n' 2
+    printf 'surface_digest=sha256:%s\n' "$digest"
+    printf 'baseline=green\n'; } > "$authority/preflight.env"
+  chmod 600 "$authority/preflight.env"
+}
+
 gate_once() {
-  local platform="$1" input="$2" state="$3" command="$4" cap="$5" surface="$6" root="$7" script
+  local platform="$1" input="$2" state="$3" command="$4" cap="$5" surface="$6" root="$7" script authority
   case "$platform" in
     claude) script="$REPO_DIR/assets/gate.claude.sh" ;;
     codex) script="$REPO_DIR/assets/gate.codex.sh" ;;
   esac
+  authority="$root/.gate-authority"
+  write_preflight_record "$root" "$surface" "$authority"
   run_input "$input" env HOME="$TEST_TMP/home-$platform" XDG_STATE_HOME="$state" \
     CLAUDE_PROJECT_DIR="$root" GATE_CMD="$command" GOAL_GATE_CAP="$cap" \
-    GATE_SURFACE="$surface" bash "$script"
+    GATE_SURFACE="$surface" GATE_AUTHORITY="$authority" \
+    GATE_PREFLIGHT_RECORD="$authority/preflight.env" bash "$script"
+}
+
+surface_digest() {
+  local root="$1" surface="$2" file digest
+  (
+    cd "$root" || return 1
+    for file in $surface; do
+      [ -f "$file" ] || return 1
+      digest="$(shasum -a 256 "$file" | awk '{print $1}')" || return 1
+      printf '%s:%s\n' "$file" "$digest"
+    done | LC_ALL=C sort | shasum -a 256 | awk '{print $1}'
+  )
 }
 
 gate_without_state_home() {
@@ -36,7 +63,8 @@ gate_without_state_home() {
   esac
   run_input "$input" env -u HOME -u XDG_STATE_HOME \
     CLAUDE_PROJECT_DIR="$root" GATE_CMD="$command" GOAL_GATE_CAP=8 \
-    GATE_SURFACE='surface.txt' bash "$script"
+    GATE_SURFACE='surface.txt' GATE_AUTHORITY="$root/.gate-authority" \
+    GATE_PREFLIGHT_RECORD="$root/.gate-authority/preflight.env" bash "$script"
 }
 
 input_for() {
@@ -97,6 +125,27 @@ for platform in claude codex; do
   gate_once "$platform" "$input" "$state" true 8 'missing-*' "$root"
   assert_success "$platform unresolved GATE_SURFACE fails closed"
   assert_terminal_json "$RUN_OUT" "$platform rejects an unresolved GATE_SURFACE"
+
+  run_input "$input" env HOME="$TEST_TMP/home-$platform" XDG_STATE_HOME="$state" \
+    CLAUDE_PROJECT_DIR="$root" GATE_CMD=true GOAL_GATE_CAP=8 GATE_SURFACE='surface.txt' \
+    GATE_SURFACE_DIGEST="$(surface_digest "$root" surface.txt)" bash "$script"
+  assert_success "$platform missing protected preflight record returns a hook-valid status"
+  assert_terminal_json "$RUN_OUT" "$platform rejects a caller-supplied digest without a protected preflight record"
+
+  stale_authority="$TEST_TMP/stale-authority-$platform"
+  stale_state="$TEST_TMP/stale-state-$platform"
+  stale_marker="$TEST_TMP/$platform-stale-command-ran"
+  mkdir -p "$stale_state"
+  write_preflight_record "$root" 'surface.txt' "$stale_authority"
+  printf 'changed surface\n' > "$root/surface.txt"
+  run_input "$input" env HOME="$TEST_TMP/home-$platform" XDG_STATE_HOME="$stale_state" \
+    CLAUDE_PROJECT_DIR="$root" GATE_CMD="printf ran > '$stale_marker'" GOAL_GATE_CAP=8 \
+    GATE_SURFACE='surface.txt' GATE_AUTHORITY="$stale_authority" \
+    GATE_PREFLIGHT_RECORD="$stale_authority/preflight.env" bash "$script"
+  assert_success "$platform stale protected preflight returns a hook-valid status"
+  assert_terminal_json "$RUN_OUT" "$platform rejects a changed verification surface before gate execution"
+  assert_path_absent "$stale_marker" "$platform changed verification surface never executes GATE_CMD"
+  printf 'surface\n' > "$root/surface.txt"
 
   no_home_marker="$TEST_TMP/$platform-no-home-command-ran"
   no_home_command="printf ran > '$no_home_marker'; false"

@@ -4,21 +4,30 @@ okf_version: "0.2"
 
 # Canonical goal method
 
-This is the platform-neutral contract for writing and running goals. Platform adapters must
-load this file and add only invocation, trust, and current hook facts; they must not redefine
-the method.
+This is the platform-neutral contract for writing and running goals. Platform adapters add only
+invocation and host facts; they do not redefine the method.
 
-## 1. Triage
+## 1. Choose the lightest useful tier
 
-Use a goal when work is multi-turn, unattended, or has an end state worth enforcing. Handle a
-small, one-shot edit directly. A goal adds coordination cost, so do not create one without a
-useful verification boundary.
+Do not create a goal for a small one-shot edit with no useful verification boundary. For work that
+does need a contract, choose one tier before authoring:
+
+- **Lightweight contract** — the default for normal interactive coding. Persist one concise draft
+  with outcome, scope, exact checks, credible alternatives considered, and the observed result;
+  freeze it when that result is recorded. It is not lifecycle authority and does not need a
+  scheduler, hook, human approval receipt, or mandatory fresh verifier.
+- **Full protected plan** — required only for unattended execution or an objective that needs
+  multiple genuinely independent executable slices. It has a frozen plan, per-node contracts, a protected
+  approval attestation, host-owned lifecycle state, and fresh verification.
+
+The tier describes assurance, not importance. Do not promote routine interactive work merely to
+make it look controlled.
 
 ## 2. Investigate before authoring
 
-Read the repository guidance, current implementation, tests, package scripts, CI configuration,
-and working-tree state. Identify the strongest deterministic verification surface and its exact
-command. Do not infer a command from a language or framework. Follow `shared/investigate.md`.
+Read repository guidance, implementation, tests, package scripts, CI configuration, and working
+tree state. Identify the strongest practical verification surface and its exact command; never
+infer a command from a language or framework. Follow `shared/investigate.md`.
 
 Classify each required fact:
 
@@ -26,72 +35,76 @@ Classify each required fact:
   and a missing decomposition specification. Stop for an answer, or propose a bounded
   specification and get approval before execution.
 - **DERIVE-then-CONFIRM:** repository facts that can be discovered, such as commands, paths,
-  existing conventions, relative baselines, and candidate execution limits. Read first, record
-  ambiguous choices, and confirm any choice that changes product behavior or scope.
+  conventions, relative baselines, and candidate execution limits. Read first, record meaningful
+  choices, and confirm a choice that changes product behavior or scope.
 
-## 3. Author one verifiable slice
+For a lightweight contract, run a safe, scoped baseline check when practical. Do not run a slow,
+networked, costly, or side-effectful command merely to satisfy a rule; record why it was not run.
+A full protected plan requires a host-owned green baseline before maker activation.
 
-Write one observable outcome with:
+## 3. Author a lightweight contract
 
-1. exact scope and constraints;
-2. an acceptance check chosen before implementation;
-3. inherited repository checks;
-4. raw command output and exit status as evidence; and
-5. concrete `stop_rules` for success, failure, maximum iterations, cost, and wall-clock time.
+Persist one concise contract for normal interactive work, then freeze it with its observed result.
+It contains:
 
-The maker may not weaken, skip, delete, or rewrite the verification surface to pass. A green
-build, typecheck, or lint is only a proxy unless it exercises the required behavior. Use
-`shared/author-goal.md` and `assets/goal.md.tmpl`.
+1. one observable outcome and exact scope, including protected paths;
+2. an exact acceptance command and explicit pass signal;
+3. relevant inherited repository checks, selected from investigation rather than copied blindly;
+4. credible alternatives considered and why each was rejected; and
+5. the observed exit/result after work, or a concise reason it could not be run.
 
-## 4. Gate deterministically
+Record decisions that materially affect behavior, interfaces, data, security, verification, or
+irreversible/external actions. Always consider alternatives, but never invent a quota of fake
+options. A lightweight contract is an auditable aid to review and resumption, not proof that a
+maker may self-certify unattended completion.
 
-For unattended work, configure the platform lifecycle gate to run a trusted, non-mutating
-verifier. Set `GATE_CMD`, `GOAL_GATE_CAP`, and `GATE_SURFACE` explicitly; there is no default test
-command or iteration cap. `GATE_SURFACE` is a whitespace-separated shell glob/list evaluated
-from the repository root: configure repo-relative entries, require at least one expansion, and
-ensure every expanded entry resolves to a regular file. A failing check may request another
-iteration below the cap. Passing permits a stop. Invalid configuration, invalid state, or reaching
-the cap stops the loop and reports needs-human.
+## 4. Author a full protected plan only when needed
 
-The counter is tamper-resistant only when the sandbox prevents the worker from writing its state
-directory. An out-of-repository path alone is not protection. Gate logs and state are evidence,
-not a security boundary. The currently supported safe setup makes the complete verification
-surface read-only to the maker before work starts. The surface digest detects only changes made
-after its first trusted baseline. A trusted orchestrator can establish that baseline only by
-invoking the hook with the exact same session payload and state key before maker edits; a manual
-or pre-session run is not reliable priming. See `shared/gates.md`.
+A full plan is a shallow DAG of immutable node contracts. Every node has its own task class,
+scope, write paths, protected oracle paths, acceptance command, expected exit, and route to the
+approved objective acceptance. A plan may mix task classes; its summary is derived from the
+nodes. Use `shared/planning-recipe.md` and its structural validator.
 
-## 5. Chain only when needed
+Before activation, the host must have:
 
-Decompose a large, approved specification into a shallow dependency DAG of persisted sub-goals.
-Every node uses the same complete `stop_rules`, acceptance evidence, and fresh verification.
-Resume from files, re-check dependencies, and escalate repeated no-progress instead of retrying.
+- an exact frozen objective and plan digest;
+- a protected human approval attestation bound to both digests;
+- a protected preflight record proving the verification surface was baselined before maker work;
+- a protected lifecycle authority and a sandbox that protects it from the maker.
 
-Parallel branches require disjoint write artifacts, no semantic or runtime dependency, isolated
-worktrees, sufficient review capacity, and an integration order. Disjoint artifacts are necessary
-but insufficient. See `shared/chaining.md`.
+The host, not this skill, selects work, dispatches roles, and resumes a run. See
+`shared/workflow.md` and `shared/state.md`.
 
-For a proposed multi-goal slice, use `shared/planning-recipe.md` as the canonical structural
-recipe. It is an approved-plan record, not a scheduler or persistent mutable task state.
+## 5. Verify proportionately
+
+For lightweight work, record the exact commands, expected pass signals, and observed exit/result.
+Retain or link full output when it is useful, and always retain it for a failure or investigation.
+A reviewer may rerun the named commands; a bare “tests passed” claim is never evidence.
+
+For full protected work, a trusted verifier reruns the acceptance command in a fresh process. The
+maker may not weaken, skip, delete, or rewrite the verification surface to pass. The lifecycle
+gate, its retry counter, and surface protection are required for every full-tier run. OS sandbox
+and egress containment remain additional controls for unattended execution.
+
+Iteration caps are enforceable controls. Time and cost are planning estimates and escalation
+signals unless the host explicitly supplies a trustworthy measurement and enforcement mechanism;
+do not describe them as hard stops otherwise.
 
 ## 6. Apply autonomy by blast radius
 
-Use the action classes in `shared/autonomy.md`. Read-only and reversible scoped actions may run
-within their bounds. External, spending, irreversible, or trust-boundary actions are Class 3 and
-require explicit, bounded human authorization. Class 4 actions are denied during unattended
-execution; a human may instead perform or separately authorize an appropriate controlled
-workflow. Repository commits require user or repository policy authority.
+Use the action classes in `shared/autonomy.md`. Read-only and scoped reversible actions may run
+within their bounds. External, spending, irreversible, or trust-boundary actions require explicit,
+bounded human authorization. Unattended Class 4 actions are denied.
 
-Hooks are defense in depth, not containment. Unattended execution requires an OS sandbox,
-least privilege, scoped writable mounts, restricted egress, budgets, and a kill path. The host
-uses the protected sequential workflow in `shared/workflow.md`; `shared/modes.md` states the
-single execution mode.
+Hooks are defense in depth, not containment. Full protected execution requires an OS sandbox,
+least privilege, scoped writable mounts, restricted egress, protected state, and a kill path.
 
 ## Completion checklist
 
-- The goal traces to approved intent and has no invented MUST-ASK facts.
-- Acceptance is behavior-oriented, exact, and protected from maker edits.
-- Success, failure, iterations, cost, and wall-clock stops are explicit.
-- Gate command, cap, state location, permissions, and trust are configured.
-- Every Class 3 action has bounded human authorization; unattended Class 4 actions are denied.
-- A fresh checker reruns the acceptance check and reviews raw evidence.
+- The chosen tier is the lightest one that provides the needed assurance.
+- The outcome, scope, exact check, and pass signal trace to approved intent.
+- Alternatives were genuinely considered and material choices are recorded.
+- Lightweight evidence names exact commands and observed results; full-tier evidence is rerun
+  independently.
+- A full plan has approval, preflight, protected state, and fresh verification before completion.
+- No claim of a hard time or cost stop is made without actual host enforcement.

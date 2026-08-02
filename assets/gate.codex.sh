@@ -86,6 +86,46 @@ valid_digest() {
   case "$1" in *[!0-9A-Fa-f]*) return 1 ;; esac
 }
 
+valid_prefixed_digest() {
+  case "$1" in sha256:*) valid_digest "${1#sha256:}" ;; *) return 1 ;; esac
+}
+
+protected_mode() {
+  local path mode
+  path=$1
+  if stat -f '%Lp' "$path" >/dev/null 2>&1; then mode=$(stat -f '%Lp' "$path"); else mode=$(stat -c '%a' "$path" 2>/dev/null) || return 1; fi
+  case "$mode" in ???) ;; *) return 1 ;; esac
+  case "${mode#?}" in *[1-7]*) return 1 ;; esac
+}
+
+validate_preflight_record() {
+  local record_key record_value record_keys record_mode
+  case "${GATE_AUTHORITY:-}" in /*) ;; *) terminal "GATE_AUTHORITY must be an absolute protected directory." ;; esac
+  if ! { [ -d "$GATE_AUTHORITY" ] && [ ! -L "$GATE_AUTHORITY" ] && protected_mode "$GATE_AUTHORITY"; }; then
+    terminal "GATE_AUTHORITY must be a protected real directory."
+  fi
+  case "${GATE_PREFLIGHT_RECORD:-}" in "$GATE_AUTHORITY"/*) ;; *) terminal "GATE_PREFLIGHT_RECORD must be inside GATE_AUTHORITY." ;; esac
+  [ -f "$GATE_PREFLIGHT_RECORD" ] && [ ! -L "$GATE_PREFLIGHT_RECORD" ] ||
+    terminal "GATE_PREFLIGHT_RECORD must be a protected regular file."
+  if stat -f '%Lp' "$GATE_PREFLIGHT_RECORD" >/dev/null 2>&1; then record_mode=$(stat -f '%Lp' "$GATE_PREFLIGHT_RECORD"); else record_mode=$(stat -c '%a' "$GATE_PREFLIGHT_RECORD" 2>/dev/null) || terminal "cannot inspect GATE_PREFLIGHT_RECORD permissions."; fi
+  [ "$record_mode" = 600 ] || terminal "GATE_PREFLIGHT_RECORD must be mode 0600."
+  record_keys=''; preflight_objective=''; preflight_plan=''; preflight_surface=''; preflight_baseline=''
+  while IFS='=' read -r record_key record_value || [ -n "${record_key:-}" ]; do
+    case "$record_key" in objective_digest|plan_digest|surface_digest|baseline) ;; *) terminal "GATE_PREFLIGHT_RECORD has an invalid field." ;; esac
+    case "|$record_keys|" in *"|$record_key|"*) terminal "GATE_PREFLIGHT_RECORD has a duplicate field." ;; esac
+    record_keys="${record_keys:+$record_keys|}$record_key"
+    case "$record_key" in objective_digest) preflight_objective=$record_value ;; plan_digest) preflight_plan=$record_value ;; surface_digest) preflight_surface=$record_value ;; baseline) preflight_baseline=$record_value ;; esac
+  done < "$GATE_PREFLIGHT_RECORD"
+  for required_key in objective_digest plan_digest surface_digest baseline; do
+    case "|$record_keys|" in *"|$required_key|"*) ;; *) terminal "GATE_PREFLIGHT_RECORD is incomplete." ;; esac
+  done
+  if ! { valid_prefixed_digest "$preflight_objective" && valid_prefixed_digest "$preflight_plan" && valid_prefixed_digest "$preflight_surface"; }; then
+    terminal "GATE_PREFLIGHT_RECORD has an invalid digest."
+  fi
+  [ "$preflight_baseline" = green ] || terminal "GATE_PREFLIGHT_RECORD baseline is not green."
+  GATE_PREFLIGHT_SURFACE_DIGEST=${preflight_surface#sha256:}
+}
+
 sha_stdin() {
   local output digest
   if [ "$SHA_TOOL" = shasum ]; then
@@ -132,7 +172,7 @@ fi
 
 TEMP_FILE=""
 # Invoked indirectly through the traps below.
-# shellcheck disable=SC2317
+# shellcheck disable=SC2317,SC2329
 cleanup_temp() {
   if [ -n "$TEMP_FILE" ]; then
     rm -f "$TEMP_FILE" 2>/dev/null || true
@@ -164,8 +204,12 @@ surface_hash() {
   ) | LC_ALL=C sort | sha_stdin
 }
 
+validate_preflight_record
 cur_surface="$(surface_hash)" ||
   terminal "GATE_SURFACE='$GATE_SURFACE' did not resolve completely or could not be hashed."
+if [ "$cur_surface" != "$GATE_PREFLIGHT_SURFACE_DIGEST" ]; then
+  terminal "the verification surface does not match the protected preflight digest."
+fi
 if [ -e "$SURFACE_FILE" ] || [ -L "$SURFACE_FILE" ]; then
   if [ -L "$SURFACE_FILE" ] || [ ! -f "$SURFACE_FILE" ] || [ ! -r "$SURFACE_FILE" ]; then
     terminal "verification-surface state is not a readable regular file."
@@ -178,7 +222,7 @@ if [ -e "$SURFACE_FILE" ] || [ -L "$SURFACE_FILE" ]; then
 else
   make_temp
   surface_tmp="$TEMP_FILE"
-  if ! printf '%s\n' "$cur_surface" >"$surface_tmp" ||
+  if ! printf '%s\n' "$GATE_PREFLIGHT_SURFACE_DIGEST" >"$surface_tmp" ||
      ! mv -f "$surface_tmp" "$SURFACE_FILE"; then
     terminal "verification-surface state could not be persisted."
   fi

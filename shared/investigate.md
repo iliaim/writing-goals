@@ -70,12 +70,16 @@ Confirm the command **exists** by reading, in this order of authority:
 - **Never confirm-run a whole-monorepo command** — it's slow, often side-effectful, and hides which
   package actually failed.
 
-## 5. Environment baseline — green before you start
+## 5. Environment baseline — proportionate to the tier
 
-- The chosen surface **must be green at baseline in this env** before any work begins.
-- Baseline **red = "blocked"**, never "not done" — the env is the problem, not the goal.
-- **Never "fix" a red baseline by editing/skipping the test.** Report `blocked`; escalate. Editing the
-  verification surface to reach green is the cardinal anti-gaming violation.
+- **Lightweight contract:** run a safe, scoped baseline check before changes when practical. If it
+  is slow, networked, costly, or side-effectful, record that it was not run and why; do not run it
+  merely to satisfy policy.
+- **Full protected plan:** the host must establish a green baseline before maker activation and
+  retain the preflight evidence in protected authority.
+- A baseline **red** is reported as pre-existing; never "fix" it by editing, skipping, or deleting
+  the verification surface. Escalate when it prevents distinguishing the requested change from the
+  environment.
 
 ## 6. Map findings → classify (feeds SKILL.md)
 

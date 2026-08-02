@@ -42,7 +42,19 @@ core_case() {
     printf 'plan_digest=%s\n' "$(activation_field plan_digest)"
     printf 'execution_order=%s\n' "$(activation_field execution_order)"; } > "$authority/activation.env"
   chmod 600 "$authority/activation.env"
+  { printf 'objective_digest=%s\n' "$(activation_field objective_digest)"
+    printf 'plan_digest=%s\n' "$(activation_field plan_digest)"
+    printf 'approver=fixture-human\n'
+    printf 'approved_at=2026-08-02T00:00:00Z\n'
+    printf 'revoked=false\n'; } > "$authority/approval.env"
+  chmod 600 "$authority/approval.env"
+  { printf 'objective_digest=%s\n' "$(activation_field objective_digest)"
+    printf 'plan_digest=%s\n' "$(activation_field plan_digest)"
+    printf 'surface_digest=sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\n'
+    printf 'baseline=green\n'; } > "$authority/preflight.env"
+  chmod 600 "$authority/preflight.env"
   bash "$runtime" --authority "$authority" --identity 20260729-GV53BZ --plan p01 --run "$run_name" \
+    --approval-record "$authority/approval.env" --preflight-record "$authority/preflight.env" \
     --activation-record "$authority/activation.env" --core-fixture "$case_file" --resume
 }
 

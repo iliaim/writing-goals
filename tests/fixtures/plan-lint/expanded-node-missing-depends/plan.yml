@@ -1,22 +1,25 @@
 id: FIXTURE-PLAN
-task_class: docs_config
-requirements: [REQ-02]
 objective_acceptance: [OBJ-01]
-execution_recipe:
-  inputs: [objective_snapshot]
-  outputs: [updated-policy]
-  maker_paths: [shared/example.md]
-  oracle_paths: [tests/example.sh]
-  evidence:
-    - order: 1
-      argv: [bash, tests/example.sh]
-      expected_exit: 0
-  handoff: writing-goals-verifier
-  fan_in_owner: writing-goals-reviewer
-  risks: [duplicate-authority]
-  stop_conditions: [missing-decision]
+alternatives:
+  - option: declared dependency
+    rejected_because: this fixture isolates an omitted dependency declaration
 dag:
   - id: author
-  - id: verify
-    depends_on: [author]
+    task_class: docs_config
+    evidence_route: red_to_green
+    requirements: [REQ-02]
+    objective_acceptance: [OBJ-01]
+    execution_recipe:
+      inputs: [objective_snapshot]
+      outputs: [updated-policy]
+      maker_paths: [shared/example.md]
+      oracle_paths: [tests/example.sh]
+      evidence:
+        - order: 1
+          argv: [bash, tests/example.sh]
+          expected_exit: 0
+      handoff: writing-goals-verifier
+      fan_in_owner: writing-goals-reviewer
+      risks: [duplicate-authority]
+      stop_conditions: [missing-decision]
 workflow: [discover, author, lint, challenge, freeze]

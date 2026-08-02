@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-# Structural plan validation only: this does not judge semantic quality or prose.
+# Structural validation for full protected plans. It deliberately does not
+# decide whether the prose, alternatives, or approval are semantically sound; it is not semantic
+# approval.
 set -u
 
 usage() { printf '%s\n' 'usage: plan-lint.sh --plan PLAN --manifest MANIFEST --index INDEX' >&2; exit 2; }
@@ -31,77 +33,120 @@ fi
 [ "$manifest_digest" = "$plan_digest" ] || fail 'manifest digest does not bind the exact plan'
 
 contains '^id:[[:space:]]*[^[:space:]]+' || fail 'missing id'
-contains '^task_class:[[:space:]]*(behavioral_code|docs_config|refactor|research_design)[[:space:]]*$' || fail 'unsupported task class'
-contains '^requirements:[[:space:]]*\[[^]]+\]' || fail 'missing requirement routes'
-contains '^objective_acceptance:[[:space:]]*\[[^]]+\]' || fail 'missing acceptance routes'
-contains '^execution_recipe:' || fail 'missing execution recipe'
-for field in inputs outputs maker_paths oracle_paths evidence handoff fan_in_owner risks stop_conditions; do
-  contains "^[[:space:]]*$field:" || fail "missing recipe field: $field"
-done
-contains 'argv:[[:space:]]*\[[^]]+\]' || fail 'evidence command must bind exact argv'
-contains 'expected_exit:[[:space:]]*[0-9]+' || fail 'evidence command must bind expected exit'
-
-maker_paths=$(sed -nE 's/.*maker_paths:[[:space:]]*\[([^]]*)\].*/\1/p' "$plan" | head -n 1)
-oracle_paths=$(sed -nE 's/.*oracle_paths:[[:space:]]*\[([^]]*)\].*/\1/p' "$plan" | head -n 1)
-[ -n "$maker_paths" ] && [ -n "$oracle_paths" ] || fail 'write paths must be explicit lists'
-for path in $(printf '%s' "$maker_paths" | tr ',' ' '); do
-  case " $oracle_paths " in *" $path "*) fail 'maker and oracle paths collide' ;; esac
-done
-
+contains '^objective_acceptance:[[:space:]]*\[[^]]+\]' || fail 'missing top-level acceptance routes'
+contains '^alternatives:' || fail 'missing alternatives record'
+alternatives_check=$(awk '
+  /^alternatives:[[:space:]]*\[\][[:space:]]*$/ { empty=1; next }
+  /^alternatives:/ { active=1; next }
+  active && /^dag:/ { active=0 }
+  active && /^  - option:[[:space:]]*[^[:space:]]+/ { options++; pending=1; next }
+  active && pending && /^    rejected_because:[[:space:]]*[^[:space:]]+/ { reasons++; pending=0; next }
+  END {
+    if (empty) { print "empty"; exit }
+    if (options == 0) { print "missing-options"; exit }
+    if (pending || reasons != options) { print "missing-reason"; exit }
+    print "ok"
+  }
+' "$plan")
+case "$alternatives_check" in
+  ok) ;;
+  empty) contains '^no_credible_alternative_reason:[[:space:]]*[^[:space:]]+' || fail 'empty alternatives need an explicit reason' ;;
+  missing-reason) fail 'each alternative needs a rejection reason' ;;
+  *) fail 'alternatives need at least one option or an explicit empty reason' ;;
+esac
 contains '^dag:' || fail 'missing dependency dag'
+
+# Canonical full plans use expanded nodes so a node owns its task class,
+# requirement/objective routes, execution recipe, and dependency declaration.
 dag_records=$(awk '
   function trim(value) { sub(/^[[:space:]]+/, "", value); sub(/[[:space:]]+$/, "", value); return value }
-  function emit(record, node, deps) {
-    node = record; sub(/^.*id:[[:space:]]*/, "", node); sub(/[[:space:],}].*$/, "", node)
-    deps = record; sub(/^.*depends_on:[[:space:]]*\[/, "", deps); sub(/\].*$/, "", deps)
-    print trim(node) "\t" trim(deps)
+  function required_value(value) { return value == "" ? "!" : value }
+  function emit() {
+    if (!active) return
+    if (evidence_item && !evidence_incomplete && evidence_argv && evidence_exit) evidence_valid="yes"
+    dependency_value = (deps == "" ? "-" : deps)
+    dependency_seen_value = (deps_seen == "" ? "no" : deps_seen)
+    evidence_valid_value = (evidence_valid == "" ? "no" : evidence_valid)
+    print required_value(id) "\t" required_value(task) "\t" required_value(route) "\t" required_value(requirements) "\t" required_value(objective) "\t" required_value(recipe) "\t" required_value(inputs) "\t" required_value(outputs) "\t" required_value(maker) "\t" required_value(oracle) "\t" required_value(evidence) "\t" evidence_valid_value "\t" required_value(handoff) "\t" required_value(fanin) "\t" required_value(risks) "\t" required_value(stops) "\t" dependency_seen_value "\t" dependency_value "\t" required_value(argv) "\t" required_value(expected_exit)
   }
-  {
-    line = $0
-    while (match(line, /\{id:[^}]*depends_on:[^}]*\}/)) {
-      emit(substr(line, RSTART, RLENGTH))
-      line = substr(line, RSTART + RLENGTH)
-    }
-    if ($0 ~ /^[[:space:]]*-[[:space:]]*id:[[:space:]]*/) {
-      if (pending_seen) exit 2
-      pending = $0; sub(/^[[:space:]]*-[[:space:]]*id:[[:space:]]*/, "", pending); pending = trim(pending)
-      if (pending !~ /^[A-Za-z0-9_-]+$/) exit 2
-      pending_seen = 1
-      next
-    }
-    if (pending_seen && $0 ~ /^[[:space:]]*depends_on:[[:space:]]*\[/) {
-      deps = $0; sub(/^[[:space:]]*depends_on:[[:space:]]*\[/, "", deps); sub(/\].*$/, "", deps)
-      print pending "\t" trim(deps)
-      pending = ""
-      pending_seen = 0
-    }
+  /^  - id:/ {
+    emit(); active=1
+    id=$0; sub(/^  - id:[[:space:]]*/, "", id); id=trim(id)
+    task=route=requirements=objective=recipe=inputs=outputs=maker=oracle=evidence=evidence_valid=handoff=fanin=risks=stops=deps_seen=deps=argv=expected_exit=evidence_item=evidence_argv=evidence_exit=evidence_incomplete=""
+    next
   }
-  END { if (pending_seen) exit 2 }
+  active && /^    task_class:/ { task=$0; sub(/^    task_class:[[:space:]]*/, "", task); task=trim(task); next }
+  active && /^    evidence_route:/ { route=$0; sub(/^    evidence_route:[[:space:]]*/, "", route); route=trim(route); next }
+  active && /^    requirements:/ { requirements=$0; sub(/^    requirements:[[:space:]]*/, "", requirements); requirements=trim(requirements); next }
+  active && /^    objective_acceptance:/ { objective=$0; sub(/^    objective_acceptance:[[:space:]]*/, "", objective); objective=trim(objective); next }
+  active && /^    execution_recipe:/ { recipe="yes"; next }
+  active && /^      inputs:/ { evidence_section=""; inputs="yes"; next }
+  active && /^      outputs:/ { evidence_section=""; outputs="yes"; next }
+  active && /^      maker_paths:/ { evidence_section=""; maker=$0; sub(/^      maker_paths:[[:space:]]*/, "", maker); maker=trim(maker); next }
+  active && /^      oracle_paths:/ { evidence_section=""; oracle=$0; sub(/^      oracle_paths:[[:space:]]*/, "", oracle); oracle=trim(oracle); next }
+  active && /^      evidence:/ { evidence="yes"; evidence_section="yes"; evidence_item=evidence_argv=evidence_exit=""; next }
+  active && /^        - order:[[:space:]]*[0-9]+/ {
+    if (evidence_item && (!evidence_argv || !evidence_exit)) evidence_incomplete="yes"
+    evidence_item="yes"; evidence_argv=evidence_exit=""; next
+  }
+  active && /^      handoff:/ { evidence_section=""; handoff="yes"; next }
+  active && /^      fan_in_owner:/ { evidence_section=""; fanin="yes"; next }
+  active && /^      risks:/ { evidence_section=""; risks="yes"; next }
+  active && /^      stop_conditions:/ { evidence_section=""; stops="yes"; next }
+  active && /^      [A-Za-z_][A-Za-z0-9_-]*:/ { evidence_section=""; next }
+  active && /^    depends_on:/ { evidence_section=""; deps_seen="yes"; deps=$0; sub(/^    depends_on:[[:space:]]*\[/, "", deps); sub(/\].*$/, "", deps); deps=trim(deps); next }
+  active && evidence_section && evidence_item && /^          argv:[[:space:]]*\[[^]]+\]/ { argv="yes"; evidence_argv="yes"; next }
+  active && evidence_section && evidence_item && /^          expected_exit:[[:space:]]*[0-9]+/ { expected_exit="yes"; evidence_exit="yes"; next }
+  END { emit() }
 ' "$plan")
-dag_parse_status=$?
-[ "$dag_parse_status" -eq 0 ] || fail 'expanded dag node lacks depends_on'
-node_ids=$(printf '%s\n' "$dag_records" | sed -nE 's/^[[:space:]]*([A-Za-z0-9_-]+)[[:space:]]*.*/\1/p')
-[ -n "$node_ids" ] || fail 'dag has no nodes'
-dupes=$(printf '%s\n' "$node_ids" | sort | uniq -d)
+[ -n "$dag_records" ] || fail 'dag must contain expanded nodes with per-node contracts'
+
+node_ids='' all_maker_paths='' all_oracle_paths=''
+while IFS=$'\t' read -r node task route requirements objective recipe inputs outputs maker oracle evidence evidence_valid handoff fanin risks stops deps_seen dependencies argv expected_exit; do
+  case "$node" in ''|*[!A-Za-z0-9_-]*) fail 'dag node id is missing or invalid' ;; esac
+  case "$task" in behavioral_code|docs_config|refactor|research_design) ;; *) fail "unsupported task class on node: $node" ;; esac
+  case "$task:$route" in behavioral_code:red_to_green|behavioral_code:characterization_to_green|docs_config:red_to_green|docs_config:characterization_to_green|refactor:characterization_to_green|research_design:source_and_challenge) ;; *) fail "invalid evidence route on node: $node" ;; esac
+  case "$requirements" in \[*\]* ) ;; *) fail "missing requirement routes on node: $node" ;; esac
+  case "$objective" in \[*\]* ) ;; *) fail "missing acceptance routes on node: $node" ;; esac
+  [ "$recipe" = yes ] || fail "missing execution recipe on node: $node"
+  [ "$evidence_valid" = yes ] || fail "evidence command is incomplete on node: $node"
+  for field in "$inputs" "$outputs" "$evidence" "$handoff" "$fanin" "$risks" "$stops" "$argv" "$expected_exit"; do
+    [ "$field" = yes ] || fail "missing recipe field on node: $node"
+  done
+  case "$maker" in \[*\]) ;; *) fail "missing recipe field on node: $node" ;; esac
+  case "$oracle" in \[*\]) ;; *) fail "missing recipe field on node: $node" ;; esac
+  [ "$deps_seen" = yes ] || fail "missing dependency declaration on node: $node"
+  for maker_path in $(printf '%s' "$maker" | tr -d '[]' | tr ',' ' '); do all_maker_paths="${all_maker_paths}${all_maker_paths:+ }$maker_path"; done
+  for oracle_path in $(printf '%s' "$oracle" | tr -d '[]' | tr ',' ' '); do all_oracle_paths="${all_oracle_paths}${all_oracle_paths:+ }$oracle_path"; done
+  node_ids="${node_ids}${node_ids:+\n}$node"
+done <<EOF
+$dag_records
+EOF
+for maker_path in $all_maker_paths; do
+  case " $all_oracle_paths " in *" $maker_path "*) fail 'maker and oracle paths collide across the dag' ;; esac
+done
+dupes=$(printf '%b\n' "$node_ids" | sort | uniq -d)
 [ -z "$dupes" ] || fail 'dag node ids must be unique'
-while IFS=$'\t' read -r node dependencies; do
-  [ -n "$node" ] || continue
+while IFS=$'\t' read -r node _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ dependencies _ _; do
   for dependency in $(printf '%s' "$dependencies" | tr ',' ' '); do
-    printf '%s\n' "$node_ids" | grep -Fx -- "$dependency" >/dev/null || fail "dag dependency is unknown: $dependency"
+    [ "$dependency" = - ] && continue
+    printf '%b\n' "$node_ids" | grep -Fx -- "$dependency" >/dev/null || fail "dag dependency is unknown: $dependency"
   done
 done <<EOF
 $dag_records
 EOF
+
 # Remove ready nodes until nothing remains. If no node can be removed, the DAG has a cycle.
-remaining="$node_ids"
+remaining=$(printf '%b\n' "$node_ids")
 while [ -n "$remaining" ]; do
   progressed=false
-  next_remaining=
+  next_remaining=''
   while IFS= read -r node; do
     [ -n "$node" ] || continue
-    dependencies=$(printf '%s\n' "$dag_records" | awk -F '\t' -v wanted="$node" '$1 == wanted { print $2; exit }')
+    dependencies=$(printf '%s\n' "$dag_records" | awk -F '\t' -v wanted="$node" '$1 == wanted { print $18; exit }')
     blocked=false
     for dependency in $(printf '%s' "$dependencies" | tr ',' ' '); do
+      [ "$dependency" = - ] && continue
       if printf '%s\n' "$remaining" | grep -Fx -- "$dependency" >/dev/null; then blocked=true; break; fi
     done
     if [ "$blocked" = true ]; then
@@ -115,8 +160,8 @@ EOF
   [ "$progressed" = true ] || fail 'dag is cyclic'
   remaining=$(printf '%b' "$next_remaining")
 done
-contains '^workflow:[[:space:]]*\[discover,[[:space:]]*author,[[:space:]]*lint,[[:space:]]*challenge,[[:space:]]*freeze\][[:space:]]*$' || fail 'workflow must lint before challenge and freeze'
 
+contains '^workflow:[[:space:]]*\[discover,[[:space:]]*author,[[:space:]]*lint,[[:space:]]*challenge,[[:space:]]*freeze\][[:space:]]*$' || fail 'workflow must lint before challenge and freeze'
 if grep -Eqi '^[[:space:]]*(task_class|execution_recipe|stop_rules)[[:space:]]*:' "$index"; then
   fail 'navigation index must not duplicate plan policy'
 fi

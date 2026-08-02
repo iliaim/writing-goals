@@ -116,13 +116,14 @@ Inside the sandbox, the deterministic layers still earn their place:
 - **`PreToolUse` deny-list hook** (`assets/deny-list.sh`) — fail-closed block of the tool inputs it
   recognizes. Coverage and exceptions are platform facts documented in each adapter.
 - **Workspace / dir scoping** — belt-and-braces with the sandbox's read-only mounts.
-- **Session cost budget** + **iteration cap** — hard stops so an unattended loop can't burn
-  the night away.
+- **Iteration cap** — a hard stop so an unattended loop cannot spin indefinitely. Treat session
+  cost or wall-clock targets as estimates and escalation signals unless the host can actually
+  measure and enforce them.
 - **Sandbox-protected gate counter + kill-switch** — keep state outside the repository and deny
   worker writes to its state directory; apply the same bounds and policy to subagents.
 
 **Bottom line:** unattended autonomy is safe only **inside an OS-level sandbox**. Within it,
 every Class-≤2 judgment call is recorded + reversible + surfaced, the run sits inside a
-cost/iteration/kill bound, and the deny-list + gate add a best-effort footgun-catching layer.
+enforced iteration/kill bound, and the deny-list + gate add a best-effort footgun-catching layer.
 The hooks are the backstop; the sandbox is the boundary. Anything less is a silent guess with
 the safety off.

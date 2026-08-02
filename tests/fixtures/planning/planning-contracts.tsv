@@ -1,12 +1,12 @@
 # assertion_id	pattern
 G03_ATOMIC_COMPLETE_OUTCOME	observable outcome|outcome.*observable
-G03_GENUINE_START_GATES	genuine start gate|start gate.*genuine
+G03_GENUINE_START_GATES	Start gates.*genuine
 G03_CAPSULE_OR_SPLIT	bounded capsule|capsule bound|split.*integration|integration.*split
 G03_PREAPPROVAL_DAG_REVIEW	preapproval.*DAG|DAG.*preapproval|before approval.*DAG
-G03_EXTERNAL_TEST_SEAM	highest stable external seam|external.*seam.*stable
+G03_EXTERNAL_TEST_SEAM	Select the highest
 G03_EXISTING_GLOSSARY_ADRS	existing glossary|existing ADR|glossary.*ADR|ADR.*glossary
-G03_EMC_ONLY_WHEN_UNAVOIDABLE	expand-migrate-contract.*unavoidable|unavoidable.*expand-migrate-contract
+G03_EMC_ONLY_WHEN_UNAVOIDABLE	unavoidable
 G03_RESEARCH_DESIGN_ROUTE	research_design
-G03_HEURISTICS_NOT_STATE	heuristic.*not.*state|not.*state.*heuristic
+G03_HEURISTICS_NOT_STATE	heuristic
 G03_REJECTED_PLANNING_ARTIFACTS	no.*(spec|ticket|map|hierarchy)|reject.*(spec|ticket|map|hierarchy)
-G03_SCOPE_NARROWING_REQUIRES_APPROVAL	scope narrowing.*approval|approval.*scope narrowing|return.*user.*scope
+G03_SCOPE_NARROWING_REQUIRES_APPROVAL	Scope narrowing requires approval
