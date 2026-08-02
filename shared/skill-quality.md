@@ -59,8 +59,9 @@ skill source, answers, or the other arm's output; both arms use fresh isolated h
 
 Run it only through the protected invocation below, with an explicit, bounded authorization for
 network access and model spend.  The protected configuration must freeze rubric and prompt
-fixture digests, host and model versions, exact argv, sandbox/tool policy, maximum turns, network
-budget, spend budget, wall-clock limit, and the append-only evidence destination.
+fixture digests, host and model versions, exact argv, sandbox/tool policy, and the append-only
+evidence destination. Record network, spend, and wall-clock limits only when the controlled runner
+can actually measure and enforce them; otherwise record authorized scope, estimates, and escalation.
 
 ```bash
 bash scripts/run-skill-behavioral-eval.sh \
@@ -72,5 +73,5 @@ The runner refuses to execute models itself: a separately authorized controlled 
 the bounded trial and appends its result.  The retained result records the frozen environment,
 home/path-isolation evidence, paired-arm rubric assertions, and versions.  It does not require
 raw model-output hash identity.  Missing credentials, a host/model/version mismatch, unavailable
-fresh homes, leakage, control contamination, absent authorization, or exhausted network/spend
-budget is a stop, not a reason to weaken the deterministic checks.
+fresh homes, leakage, control contamination, absent authorization, or an enforced limit being
+reached is a stop, not a reason to weaken the deterministic checks.

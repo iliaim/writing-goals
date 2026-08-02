@@ -23,7 +23,7 @@ mkdir -p "$authority"
 chmod 700 "$authority"
 
 core_case() {
-  case_name=$1
+  case_name=$1 record_mode=${2:-complete}
   run_name=run-g07-fixture
   case "$case_name" in six-slice-parent|five-slices-parent-done|parent-missing-*) run_name=run-g07-six-slice ;; esac
   case_file="$fixtures/$case_name/core.env"
@@ -40,8 +40,28 @@ core_case() {
     printf 'plan_digest=%s\n' "$(activation_field plan_digest)"
     printf 'execution_order=%s\n' "$(activation_field execution_order)"; } > "$authority/activation.env"
   chmod 600 "$authority/activation.env"
-  bash "$runtime" --authority "$authority" --identity 20260729-GV53BZ --plan p01 --run "$run_name" \
-    --activation-record "$authority/activation.env" --core-fixture "$case_file" --resume
+  { printf 'objective_digest=%s\n' "$(activation_field objective_digest)"
+    printf 'plan_digest=%s\n' "$(activation_field plan_digest)"
+    printf 'approver=fixture-human\n'
+    printf 'approved_at=2026-08-02T00:00:00Z\n'
+    printf 'revoked=false\n'; } > "$authority/approval.env"
+  chmod 600 "$authority/approval.env"
+  preflight_surface='sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
+  [ "$record_mode" = invalid-preflight ] && preflight_surface='sha256:not-a-digest'
+  { printf 'objective_digest=%s\n' "$(activation_field objective_digest)"
+    printf 'plan_digest=%s\n' "$(activation_field plan_digest)"
+    printf 'surface_digest=%s\n' "$preflight_surface"
+    printf 'baseline=green\n'; } > "$authority/preflight.env"
+  chmod 600 "$authority/preflight.env"
+  if [ "$record_mode" = missing-preflight ]; then
+    bash "$runtime" --authority "$authority" --identity 20260729-GV53BZ --plan p01 --run "$run_name" \
+      --approval-record "$authority/approval.env" --activation-record "$authority/activation.env" \
+      --core-fixture "$case_file" --resume
+  else
+    bash "$runtime" --authority "$authority" --identity 20260729-GV53BZ --plan p01 --run "$run_name" \
+      --approval-record "$authority/approval.env" --preflight-record "$authority/preflight.env" \
+      --activation-record "$authority/activation.env" --core-fixture "$case_file" --resume
+  fi
 }
 
 assert_reject() {
@@ -57,6 +77,12 @@ assert_file_contains "$RUN_OUT" '^role=writing-goals-maker$' 'G07_ROLE_HANDOFFS:
 run_command core_case resume-verifier
 assert_success 'G07_ROLE_HANDOFFS: verifier handoff is accepted only at its recorded cursor'
 assert_file_contains "$RUN_OUT" '^role=writing-goals-verifier$' 'G07_ROLE_HANDOFFS: verifier role is explicit'
+run_command core_case resume-maker missing-preflight
+assert_nonzero 'G07_PREFLIGHT_REQUIRED: full-tier resume rejects a missing protected preflight record'
+assert_contains "$(cat "$RUN_OUT" "$RUN_ERR")" 'requires approval, preflight, activation records' 'G07_PREFLIGHT_REQUIRED: missing preflight fails before runtime continuation'
+run_command core_case resume-maker invalid-preflight
+assert_nonzero 'G07_PREFLIGHT_FORMAT: full-tier resume rejects a noncanonical preflight surface digest'
+assert_contains "$(cat "$RUN_OUT" "$RUN_ERR")" 'invalid preflight surface digest' 'G07_PREFLIGHT_FORMAT: the strict preflight digest diagnostic is reported'
 assert_file_contains "$workflow" 'oracle-author.*maker.*verifier.*reviewer|maker.*verifier.*reviewer' 'G07_PROTECTED_INTEGRATION: workflow records protected role handoffs'
 assert_file_contains "$workflow" 'host.*(select|selects).*first.*ready|first.*ready.*host.*(select|selects)' 'G07_PROTECTED_INTEGRATION: host, not a helper, selects the ready node'
 assert_file_contains "$workflow" 'frozen.*(order|digest).*(activation|bound)|(activation|bound).*(frozen.*(order|digest))' 'G07_FROZEN_ORDER_ACTIVATION_BOUND: activation binds the frozen order and digest'

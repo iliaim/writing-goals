@@ -31,6 +31,10 @@ that release.
 
 ### Fixed
 
+- Bound both Stop-hook gates to a strict protected preflight receipt, rejecting caller-supplied,
+  malformed, missing, and stale verification surfaces before acceptance commands run.
+- Tightened full-plan linting so evidence commands, dependencies, alternative decisions, task-class
+  routes, and maker/oracle path ownership are validated at their structural boundaries.
 - Restored public guidance that a README restructure had silently dropped: independent confirmation,
   production changes, explicit authorization, and the coordination-versus-value test for skipping a
   goal.
@@ -41,6 +45,8 @@ that release.
 
 ### Changed
 
+- Aligned lightweight and full-tier guidance around proportional verification, genuinely independent
+  multi-slice work, and only host-enforceable time or cost limits.
 - Reorganized the README around user outcomes, first use, proof, scope, and trust boundaries.
 - Corrected Codex metadata to avoid Claude-only `/goal` terminology.
 - Strengthened documentation contracts for public files, links, and adapter wording.

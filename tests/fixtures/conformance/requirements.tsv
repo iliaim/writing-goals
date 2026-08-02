@@ -1,6 +1,6 @@
 # requirement_id	contract_test	assertion_id	objective_acceptance
 REQ-01	tests/test_roles.sh	G03_ROLE_ISOLATION	OBJ-AC-01
-REQ-02	tests/test_planning.sh	G03_DISCOVERY_DIALOGUE	OBJ-AC-01
+REQ-02	tests/test_planning.sh	G03_ALTERNATIVE_REJECTION	OBJ-AC-01
 REQ-03	tests/test_okf.sh	G01_OBJECTIVE_SNAPSHOT_MANIFEST_BINDING	OBJ-AC-13
 REQ-04	tests/test_okf.sh	G01_OKF_ROUTES	OBJ-AC-01
 REQ-05	tests/test_hygiene.sh	G02_LEGACY_MIGRATION_COMPLETE	OBJ-AC-02

@@ -52,18 +52,16 @@ In Codex:
 
 ```text
 $writing-goals Turn the authentication migration into one bounded goal. Investigate this
-repository for the exact acceptance command, keep existing CI green, require raw output and an
-exit code, stop if the same check fails twice without progress, and stop after four iterations,
-USD 5 of model/API cost, or 45 minutes.
+repository for the exact acceptance command, keep existing CI green, record the observed exit
+and pass signal, and escalate if the same check fails twice without progress.
 ```
 
 In Claude Code:
 
 ```text
 /writing-goals Turn the authentication migration into one bounded goal. Investigate this
-repository for the exact acceptance command, keep existing CI green, require raw output and an
-exit code, stop if the same check fails twice without progress, and stop after four iterations,
-USD 5 of model/API cost, or 45 minutes.
+repository for the exact acceptance command, keep existing CI green, record the observed exit
+and pass signal, and escalate if the same check fails twice without progress.
 ```
 
 Review the resulting contract before execution. Product scope, irreversible choices, and absolute
@@ -78,21 +76,22 @@ A well-formed contract names:
 3. the specific exit code, string, or number that means success;
 4. paths that may and may not change;
 5. inherited repository checks;
-6. raw output and exit-code evidence; and
-7. success, failure, iteration, cost, and wall-clock stops.
+6. observed exit/result evidence, with full output retained or linked when useful; and
+7. escalation conditions for unclear or repeatedly failing work.
 
 If any of these are missing, revise the contract before running it.
 
-## Add unattended verification
+## Add full-tier verification
 
-Interactive goal writing does not require a lifecycle hook. For unattended work:
+Interactive goal writing does not require a lifecycle hook. For unattended or genuinely independent executable multi-slice work:
 
 1. read [`../shared/gates.md`](../shared/gates.md);
 2. select a trusted, deterministic, non-mutating `GATE_CMD`;
 3. make the complete `GATE_SURFACE` read-only to the maker before work;
 4. protect gate state with sandbox permissions;
-5. configure a positive `GOAL_GATE_CAP`; and
-6. install the platform-specific gate inside an OS-level sandbox.
+5. configure a positive `GOAL_GATE_CAP`, protected `GATE_AUTHORITY`, and its mode-0600
+   `GATE_PREFLIGHT_RECORD`; and
+6. install the platform-specific gate; use an OS-level sandbox for unattended execution.
 
 The scripts do not create containment. Read the
 [security model](security-model.md) before running an unattended permission mode.

@@ -10,6 +10,11 @@ risk; it provides no export or cross-host recovery mechanism.
 The authority is an absolute, non-symlinked directory that is not writable by
 group or other users.
 
+Before activation, the authority additionally contains an immutable approval attestation bound to
+the exact objective and plan digests, with approver identity, timestamp, and revocation status. It
+also contains an immutable preflight record bound to those digests and the verification-surface
+digest. The host creates both; repository documents cannot substitute for either record.
+
 `assets/run-state-cas.sh` is the narrow writer. It accepts an explicit
 identity, `pNN` plan, run ID, expected generation and digest, next state, and
 candidate. It locks that explicit run, compares the protected preimage, writes

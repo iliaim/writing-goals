@@ -14,4 +14,4 @@
 interface:
   display_name: "Writing Goals"
   short_description: "Author bounded goal contracts with reproducible acceptance checks."
-  default_prompt: "Use writing-goals to turn this task into a bounded, verifiable goal contract with an exact acceptance check and complete stop rules."
+  default_prompt: "Use writing-goals to turn this task into a bounded, verifiable goal contract with an exact acceptance check and proportional escalation."

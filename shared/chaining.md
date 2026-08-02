@@ -4,11 +4,12 @@ okf_version: "0.2"
 
 # Chaining — turn a big objective into a gated chain
 
-Use a chain only when one verifiable contract cannot contain the approved work. A chain is a
-shallow DAG of immutable Goal definitions with protected lifecycle records. Each node ends at a
-machine-checkable gate that a fresh checker reruns; the maker never certifies its own completion.
-Use `shared/planning-recipe.md` for the canonical plan shape and task-class evidence routes. It
-does not create a scheduler, automatic dispatch, or a second mutable plan.
+Use a chain only for an unattended objective or work that genuinely needs multiple independently
+executable slices. A chain is the **full protected tier**: a shallow DAG of immutable node
+contracts with host-owned lifecycle records. Each node ends at a machine-checkable gate that a
+fresh checker reruns; the maker never certifies its own completion. Use
+`shared/planning-recipe.md` for the canonical plan shape and task-class evidence routes. It does
+not create a scheduler, automatic dispatch, or a second mutable plan.
 
 ## 1. Start from an approved specification
 
@@ -25,9 +26,10 @@ slices. Keep work serialized whenever branches share artifacts or have semantic 
 ## 3. Keep objective and goal records separate
 
 Use the workspace layout defined by the active platform adapter. Keep the approved objective
-immutable and separate from local planning material, which is untrusted. Each Goal definition names a stable id, one-line title,
-dependencies, acceptance, complete stop rules, owner, and write artifacts. Dependencies are
-explicit edges rather than an unbounded nested array.
+immutable and separate from local planning material, which is untrusted. Each node names a stable
+id, task class, objective route, acceptance, owner, and write artifacts. Dependencies are explicit
+edges rather than an unbounded nested array. A plan can mix task classes; each node follows its own
+evidence route.
 
 Every replanned goal must serve an approved objective acceptance line. Changing the approved
 objective is a Class-3 human checkpoint, never an unattended edit to make a plan fit.
@@ -46,9 +48,10 @@ integration order. A single file never has two concurrent writers.
 ## 5. Escalate instead of looping
 
 On a block, use a fixed ladder: retry a transient failure, replan a wrong approach, serialize
-contested work, then ask a human for a decision, secret, or specification. Stop on the explicit
-iteration, cost, or wall-clock bound. Repeating an unchanged failed action is no progress, not a
-new iteration.
+contested work, then ask a human for a decision, secret, or specification. Stop on the enforced
+iteration cap or an explicit host signal. Time and cost are escalation signals unless the host
+measures and enforces them. Repeating an unchanged failed action is no progress, not a new
+iteration.
 
 ## See also
 

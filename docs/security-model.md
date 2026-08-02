@@ -34,7 +34,7 @@ acceptance check while relying on an OS-level sandbox for containment.
 
 | Component | What it provides | What it does not provide |
 |---|---|---|
-| Goal contract | Declared outcome, scope, evidence, and bounds | Independent execution or containment |
+| Goal contract | Declared outcome, scope, and evidence | Independent execution or containment |
 | Stop-hook gate | Fresh-process execution of a trusted acceptance command | Protection if the command, surface, or state is writable by the maker |
 | Surface digest | Detection of changes after a trusted baseline | A trustworthy first baseline by itself |
 | Pre-use deny-list | Best-effort blocking of recognized cooperative mistakes | Sound shell parsing or adversarial containment |
@@ -50,7 +50,7 @@ Run the complete agent process inside an OS-level sandbox with:
 - read-only mounts outside the scoped workspace;
 - no ambient secrets;
 - denied network egress by default, with narrow allowlisting when necessary;
-- explicit time, cost, and iteration budgets;
+- an enforced iteration cap, plus time/cost limits only when the host can measure and enforce them;
 - gate state the maker cannot write;
 - a read-only verification surface established before maker work; and
 - an independent kill path.
@@ -65,6 +65,11 @@ another untrusted source.
 
 `GATE_SURFACE` is a whitespace-separated shell glob/list resolved from the repository root. Every
 expansion must be a regular file. Filenames containing whitespace are unsupported.
+
+`GATE_PREFLIGHT_RECORD` is a mode-0600 receipt inside protected `GATE_AUTHORITY`, not a
+caller-supplied digest. It carries objective and plan digests, a `sha256:` surface digest, and a
+green baseline. The gate validates that receipt and rejects a missing or mismatched surface before
+running `GATE_CMD`.
 
 Gate state outside the repository is not protected merely by location. Filesystem permissions
 must prevent the maker from modifying it.

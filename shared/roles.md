@@ -16,9 +16,10 @@ proof of host prose compliance. same-model review is correlated evidence, so imp
 need independent verification and deterministic checks.
 
 The planner and challenger jointly perform one preapproval DAG review before approval. Discovery
-asks one question at a time, and the planner records two to four alternatives with rejected reasons.
-The oracle-author owns protected tests; the maker owns only `maker_write_paths` in a bounded worktree;
-the verifier and reviewer are fresh and read-only; the publisher has no maker authority.
+considers and records credible alternatives with rejected reasons; it never invents a fixed number
+of options. The oracle-author owns and freezes protected tests before activation. The maker owns
+only `maker_write_paths` in a bounded worktree; the verifier and reviewer are fresh and read-only;
+the publisher has no maker authority.
 
 Before activation, record exactly one classification: `standalone_slice` or `parent_objective`.
 `parent_objective` requires the approved objective, selected frozen plan, complete approved DAG, and

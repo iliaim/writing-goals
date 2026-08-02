@@ -27,20 +27,18 @@ while IFS=$'\t' read -r assertion_id pattern; do
   assert_contains "$planning_surface" "$pattern" "$assertion_id: canonical workflow or goal template carries the planning rule"
 done < "$fixture"
 
-assert_file_contains "$workflow" 'one question|single question' \
-  'G03_DISCOVERY_DIALOGUE: discovery asks one question at a time'
-assert_file_contains "$workflow" 'two.*alternative|four.*alternative|2.*alternative|4.*alternative' \
-  'G03_ALTERNATIVE_REJECTION: planning records two-to-four alternatives and why rejected'
-assert_file_contains "$workflow" 'approval barrier|approved.*before.*(dispatch|activation)|before.*(dispatch|activation).*approved' \
+assert_file_contains "$workflow" 'credible alternatives.*rejection reasons|alternatives.*rejection reasons' \
+  'G03_ALTERNATIVE_REJECTION: planning records credible alternatives and why rejected'
+assert_file_contains "$workflow" 'A human approves the frozen plan before' \
   'G03_APPROVAL_BARRIER: no maker dispatch or activation precedes plan approval'
-assert_file_contains "$template" 'observable_outcome|observable outcome' \
+assert_file_contains "$template" 'Observable outcome|observable outcome' \
   'G03_TEMPLATE_OUTCOME: template persists an observable outcome field'
-assert_file_contains "$template" 'start_gates|start gates|genuine_start_gates' \
-  'G03_TEMPLATE_START_GATES: template persists genuine start gates'
-assert_file_contains "$template" 'capsule.*(bound|size)|capsule_bound' \
-  'G03_TEMPLATE_CAPSULE: template persists a bounded capsule'
-assert_file_contains "$template" 'integration' \
-  'G03_TEMPLATE_INTEGRATION: template assigns integration responsibility'
+assert_file_contains "$template" 'Writable paths|Protected paths' \
+  'G03_TEMPLATE_SCOPE: lightweight template persists scoped paths'
+assert_file_contains "$template" 'Acceptance and regression checks' \
+  'G03_TEMPLATE_CHECKS: lightweight template persists exact verification'
+assert_file_contains "$template" 'Alternatives considered' \
+  'G03_TEMPLATE_ALTERNATIVES: lightweight template persists alternatives'
 
 while IFS= read -r artifact; do
   case "$artifact" in ''|'#'*) continue ;; esac

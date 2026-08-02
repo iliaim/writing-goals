@@ -19,12 +19,12 @@ validate_authority_path() {
   done
   [ -d "$authority_input" ] && [ ! -L "$authority_input" ] || die 'authority must be a real directory'
 }
-authority='' identity='' plan='' run='' status=false reopen=false approval_revoked=false core_fixture='' activation_record='' activation_receipt='' resume=false
+authority='' identity='' plan='' run='' status=false reopen=false approval_revoked=false core_fixture='' activation_record='' activation_receipt='' approval_record='' preflight_record='' resume=false
 while [ "$#" -gt 0 ]; do
   case "$1" in
-    --authority|--identity|--plan|--run|--core-fixture|--activation-record|--activation-receipt)
+    --authority|--identity|--plan|--run|--core-fixture|--activation-record|--activation-receipt|--approval-record|--preflight-record)
       [ "$#" -ge 2 ] || die "missing value for $1"
-      case "$1" in --authority) authority=$2 ;; --identity) identity=$2 ;; --plan) plan=$2 ;; --run) run=$2 ;; --core-fixture) core_fixture=$2 ;; --activation-record) activation_record=$2 ;; --activation-receipt) activation_receipt=$2 ;; esac
+      case "$1" in --authority) authority=$2 ;; --identity) identity=$2 ;; --plan) plan=$2 ;; --run) run=$2 ;; --core-fixture) core_fixture=$2 ;; --activation-record) activation_record=$2 ;; --activation-receipt) activation_receipt=$2 ;; --approval-record) approval_record=$2 ;; --preflight-record) preflight_record=$2 ;; esac
       shift 2 ;;
     --status) status=true; shift ;;
     --resume) resume=true; shift ;;
@@ -44,6 +44,33 @@ case "$run" in *[!A-Za-z0-9._-]*|'') die 'invalid run' ;; esac
 if stat -f '%Lp' "$authority" >/dev/null 2>&1; then mode=$(stat -f '%Lp' "$authority"); else mode=$(stat -c '%a' "$authority" 2>/dev/null) || die 'cannot inspect authority permissions'; fi
 case "$mode" in ???) ;; *) die 'cannot inspect authority permissions' ;; esac
 case "${mode#?}" in *[1-7]*) die 'authority is not protected' ;; esac
+
+validate_protected_record() {
+  record_path=$1 record_label=$2 expected_keys=$3
+  case "$record_path" in "$authority"/*) ;; *) die "$record_label must be inside authority" ;; esac
+  [ -f "$record_path" ] && [ ! -L "$record_path" ] || die "missing protected $record_label"
+  if stat -f '%Lp' "$record_path" >/dev/null 2>&1; then record_mode=$(stat -f '%Lp' "$record_path"); else record_mode=$(stat -c '%a' "$record_path" 2>/dev/null) || die "cannot inspect $record_label permissions"; fi
+  [ "$record_mode" = 600 ] || die "$record_label is not protected"
+  record_keys=''
+  while IFS='=' read -r record_key record_value || [ -n "${record_key:-}" ]; do
+    case "|$expected_keys|" in *"|$record_key|"*) ;; *) die "invalid protected $record_label field" ;; esac
+    case "|$record_keys|" in *"|$record_key|"*) die "duplicate protected $record_label field" ;; esac
+    record_keys="${record_keys:+$record_keys|}$record_key"
+    case "$record_key" in
+      objective_digest) record_objective_digest=$record_value ;;
+      plan_digest) record_plan_digest=$record_value ;;
+      approver) record_approver=$record_value ;;
+      approved_at) record_approved_at=$record_value ;;
+      revoked) record_revoked=$record_value ;;
+      surface_digest) record_surface_digest=$record_value ;;
+      baseline) record_baseline=$record_value ;;
+    esac
+  done < "$record_path"
+  old_ifs=$IFS; IFS='|'; set -- $expected_keys; IFS=$old_ifs
+  for required_key in "$@"; do
+    case "|$record_keys|" in *"|$required_key|"*) ;; *) die "incomplete protected $record_label" ;; esac
+  done
+}
 
 # P02 activation is allowed only after the immutable p01 predecessor receipt
 # binds the frozen manifest, objective, commit, and tree.  These values are
@@ -77,7 +104,7 @@ fi
 # It is not a scheduler: the host supplies the fixture and performs any later
 # dispatch after this command has returned.
 if [ -n "$core_fixture" ] || [ "$resume" = true ]; then
-  [ -n "$core_fixture" ] && [ -n "$activation_record" ] && [ "$resume" = true ] || die 'core fixture requires --activation-record and --resume'
+  [ -n "$core_fixture" ] && [ -n "$activation_record" ] && [ -n "$approval_record" ] && [ -n "$preflight_record" ] && [ "$resume" = true ] || die 'core fixture requires approval, preflight, activation records, and --resume'
   [ "$status" = false ] && [ "$reopen" = false ] && [ "$approval_revoked" = false ] || die 'core fixture options are incompatible with lifecycle options'
   [ -f "$core_fixture" ] && [ ! -L "$core_fixture" ] || die 'core fixture must be a regular file'
   case "$activation_record" in "$authority"/*) ;; *) die 'activation record must be inside authority' ;; esac
@@ -171,6 +198,20 @@ if [ -n "$core_fixture" ] || [ "$resume" = true ]; then
   [ "$core_objective_digest" = "$activation_objective" ] || reject_core activation-objective-digest-drift
   [ "$core_plan_digest" = "$activation_plan_digest" ] || reject_core activation-plan-digest-drift
   [ "$core_order" = "$activation_order" ] || reject_core activation-execution-order-drift
+  validate_protected_record "$approval_record" 'approval record' 'objective_digest|plan_digest|approver|approved_at|revoked'
+  [ "$record_objective_digest" = "$core_objective_digest" ] || die 'approval objective digest drift'
+  [ "$record_plan_digest" = "$core_plan_digest" ] || die 'approval plan digest drift'
+  [ -n "$record_approver" ] && [ -n "$record_approved_at" ] || die 'incomplete protected approval record'
+  [ "$record_revoked" = false ] || die 'approval is revoked'
+  validate_protected_record "$preflight_record" 'preflight record' 'objective_digest|plan_digest|surface_digest|baseline'
+  [ "$record_objective_digest" = "$core_objective_digest" ] || die 'preflight objective digest drift'
+  [ "$record_plan_digest" = "$core_plan_digest" ] || die 'preflight plan digest drift'
+  case "$record_surface_digest" in
+    sha256:????????????????????????????????????????????????????????????????)
+      case "${record_surface_digest#sha256:}" in *[!0-9A-Fa-f]*) die 'invalid preflight surface digest' ;; esac ;;
+    *) die 'invalid preflight surface digest' ;;
+  esac
+  [ "$record_baseline" = green ] || die 'preflight baseline is not green'
   [ -z "$core_parallel" ] || reject_core parallel-dispatch-not-permitted
   if [ -n "$core_successor" ]; then contains_node "$order_nodes" "$core_successor" || reject_core unknown-successor; fi
   [ -z "$core_untrusted" ] || reject_core untrusted-report-not-authority
@@ -202,7 +243,7 @@ if [ -n "$core_fixture" ] || [ "$resume" = true ]; then
   if [ -n "$core_cursor" ]; then
     cursor_node=${core_cursor%%:*}; cursor_role=${core_cursor#*:}
     [ "$cursor_node" != "$core_cursor" ] && contains_node "$order_nodes" "$cursor_node" || die 'invalid role cursor'
-    case "$cursor_role" in writing-goals-oracle-author|writing-goals-maker|writing-goals-verifier|writing-goals-reviewer) ;; *) die 'invalid role cursor' ;; esac
+    case "$cursor_role" in writing-goals-maker|writing-goals-verifier|writing-goals-reviewer) ;; *) die 'invalid role cursor' ;; esac
     if [ "$core_result" = resume ]; then
       [ "$core_current" = "$cursor_node" ] && [ "$core_role" = "$cursor_role" ] || die 'core cursor mismatch'
     fi

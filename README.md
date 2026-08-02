@@ -11,46 +11,46 @@ okf_version: "0.2"
 [![Platforms: Claude Code and Codex](https://img.shields.io/badge/platforms-Claude%20Code%20%2B%20Codex-4f46e5.svg)](#platform-support)
 [![Bash 3.2+](https://img.shields.io/badge/bash-3.2%2B-555.svg)](#build-and-install)
 
-`writing-goals` turns open-ended agent work into bounded goal contracts with exact acceptance
-checks, independent verification, and explicit limits on retries, time, and cost. The core method
-is platform-neutral; this repository currently ships tested Claude Code and Codex adapters.
+`writing-goals` turns open-ended agent work into verifiable contracts: a lightweight persisted
+contract for normal interactive work, and a protected plan only for unattended or genuinely independent multi-slice
+work. The platform-neutral core method currently ships tested Claude Code and Codex adapters.
 
 > [!IMPORTANT]
-> **The maker does not certify its own completion.** A fresh checker must be able to rerun the
-> same acceptance command and reach the same result.
+> **The maker does not certify its own completion.** Every contract records an exact command and
+> observed result; full-tier work additionally requires a fresh checker to rerun it.
 
 **New here?** [Install guide](docs/quickstart.md) · [Worked example](#worked-example) ·
 [Security model](docs/security-model.md)
 
 ## How it works
 
-Two roles, one pre-written check, and stop rules that are decided before implementation starts.
+A lightweight contract for ordinary work; a protected host workflow for unattended or genuinely
+independently executable multi-slice work.
 
 ```mermaid
 flowchart TD
     accTitle: Goal execution loop
     accDescr {
-      Intent leads to investigation and a written goal contract. A maker implements one slice.
-      A fresh checker reruns the exact acceptance command. Green completes with retained raw
-      output and exit code. Red within remaining limits returns to the maker. Invalid state or
-      a reached stop rule needs a human.
+      Intent leads to investigation and a written contract. A maker implements one slice.
+      Lightweight work records the observed result; full-tier checking reruns the exact command.
+      Repeated red, unclear scope, or protected lifecycle failure needs a human.
     }
     A(["Intent"]) --> B["Investigate<br/>real commands, tests, CI, working tree"]
-    B --> C["Write the goal contract<br/>outcome · scope · evidence · stop rules"]
+    B --> C["Write the contract<br/>outcome · scope · checks · alternatives"]
 
     subgraph maker ["MAKER — may change code"]
         D["Implement one slice"]
     end
 
     subgraph checker ["FRESH CHECKER — may not change code"]
-        E{"Rerun the exact<br/>acceptance command"}
+    E{"Record evidence / full-tier<br/>rerun of acceptance command"}
     end
 
     C --> D
     D --> E
-    E -->|green| F(["Complete<br/>raw output and exit code retained"])
-    E -->|"red, limits remain"| D
-    E -->|"invalid state, or a<br/>stop rule is reached"| G(["Needs human"])
+    E -->|green| F(["Complete<br/>observed result recorded"])
+    E -->|"red, iteration cap remains"| D
+    E -->|"unclear, repeated red, or<br/>protected gate failure"| G(["Needs human"])
 
     style maker stroke:#6366f1,stroke-width:2px
     style checker stroke:#b45309,stroke-width:2px
@@ -67,11 +67,13 @@ flowchart TD
 ```
 
 In text: investigate the real repository, define one observable outcome and its check, let the
-maker implement it, then have a fresh checker rerun the exact command. A failure may trigger a
-bounded retry; invalid state or an exhausted limit stops for a human.
+maker implement it, then record the exact observed command result. A reviewer may rerun it when
+proportionate; a full-tier checker must rerun it. Repeated red or an unclear decision stops for a
+human, while full-tier hosts enforce a protected iteration cap.
 
 The separation is the point. A maker can announce success, but the announcement never advances the
-goal — only a rerun of the pre-written command does, and its raw output is what gets retained.
+goal — only a rerun of the pre-written command does, and its observed result is what gets
+recorded. Keep or link full output for failures and when it helps diagnosis.
 Investigation and contract authoring come before either role is assigned, so they sit outside both
 lanes.
 
@@ -82,8 +84,8 @@ Ordinary prompts describe work, but they rarely define a trustworthy end state:
 | Ordinary agent task | `writing-goals` contract |
 |---|---|
 | Completion is subjective | The acceptance command is chosen before implementation |
-| The maker can announce that it is done | A fresh checker reruns the evidence |
-| Retries can stop early or continue indefinitely | Success, failure, iteration, time, and cost stops are explicit |
+| The maker can announce that it is done | Exact observed evidence is recorded; full tier reruns it independently |
+| Retries can stop early or continue indefinitely | Full-tier hosts enforce an iteration cap; normal work escalates repeated red |
 | A green build may be treated as proof of behavior | Verification surfaces are ranked and weak proxies are named |
 | A hook may be mistaken for containment | Trust boundaries and OS isolation remain explicit |
 
@@ -99,12 +101,9 @@ Becomes a bounded contract:
 Done when:     bash tests/auth/run.sh exits 0 and reports 12 passing scenarios
 Also green:    bash tests/run.sh exits 0
 Scope:         only edit src/auth/; do not edit, skip, or delete tests/auth/
-Verification:  paste the raw output from both commands and each exit code
+Verification:  record each observed exit and pass signal; retain output when useful
 Stop:          success = both checks pass
-               failure = the auth check fails twice without progress
-               max_iterations = 4
-               max_cost = USD 5
-               max_wall_clock = 45 minutes
+               repeated red without progress = escalate to a human
 ```
 
 The checker then returns evidence a third party can re-derive, not a summary:
@@ -167,7 +166,7 @@ request.
 
 1. **Triage** whether a goal is useful.
 2. **Investigate** repository guidance, implementation, tests, CI, and the working tree.
-3. **Author** one observable slice with scope, evidence, inherited checks, and complete stop rules.
+3. **Author** a lightweight contract for normal work, or a full protected plan only when needed.
 4. **Gate** unattended work with a trusted, deterministic, non-mutating checker.
 5. **Chain** only an approved larger specification into a shallow, resumable dependency graph.
 6. **Apply autonomy by blast radius**, recording reversible choices and stopping for external or
@@ -253,7 +252,7 @@ unrelated skills and agents.
 
 ## Deterministic gate
 
-The gate is optional for interactive goal writing and required for unattended execution. It turns
+The gate is optional for interactive goal writing and required for every full-tier run. It turns
 the acceptance command into a Stop-hook decision with three normal outcomes:
 
 | Gate result | The hook emits | What happens next |
@@ -269,13 +268,15 @@ itself built with `jq`.
 Failing command output is stored in a session-keyed, mode-0600 state log rather than returned to
 the model.
 
-Copy the platform script into the target repository, make it executable, and configure all three
+Copy the platform script into the target repository, make it executable, and configure all five
 inputs in the environment that launches the agent:
 
 ```bash
 export GATE_CMD='bash tests/run.sh'       # trusted, deterministic, non-mutating
 export GOAL_GATE_CAP=6                    # explicit positive base-10 integer
 export GATE_SURFACE='tests/*.sh'          # mandatory repo-relative shell glob/list
+export GATE_AUTHORITY='/protected/goal-authority'
+export GATE_PREFLIGHT_RECORD="$GATE_AUTHORITY/preflight.env"
 ```
 
 `GATE_CMD` is evaluated as shell code, so it is a trusted configuration boundary, not untrusted
@@ -283,13 +284,11 @@ input. `GATE_SURFACE` uses whitespace-separated shell words and cannot represent
 containing whitespace. Every expansion must resolve to a regular file.
 
 > [!WARNING]
-> The stored digest only detects changes after a **trusted baseline** exists. The currently
-> supported setup makes the complete verification surface read-only to the maker before work
-> starts. A trusted orchestrator can establish the first digest only by invoking the hook with the
-> exact same session payload and state key before maker edits. The scripts have no prime-only
-> interface, so manual or pre-session priming is not reliable. Keeping gate state outside the
-> repository is not sufficient by itself; sandbox permissions must prevent the maker from altering
-> it.
+> A full-tier host establishes and protects the green preflight receipt before maker work. The gate
+> requires a mode-0600 `GATE_PREFLIGHT_RECORD` inside `GATE_AUTHORITY`, validates its bound digest,
+> and rejects a missing or mismatched surface. The gate never accepts a first post-edit invocation as
+> a baseline. Keeping gate state outside the repository is not sufficient by itself; sandbox
+> permissions must prevent the maker from altering it.
 
 <details>
 <summary><b>Register the Stop hook in Claude Code</b></summary>
@@ -357,7 +356,8 @@ Read [`shared/gates.md`](shared/gates.md) before using the lifecycle gate.
 > or prompt-injected process.
 
 Unattended work requires an OS-level sandbox, least privilege, read-only mounts outside the
-workspace, restricted egress, explicit budgets, protected gate state, and a kill path. See the
+workspace, restricted egress, explicit authorized scope (and enforceable limits when available),
+protected gate state, and a kill path. See the
 [Security model](docs/security-model.md) and [`shared/autonomy.md`](shared/autonomy.md).
 
 ## Maintainer benchmark harness
