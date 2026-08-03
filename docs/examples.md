@@ -10,14 +10,13 @@ derived from or approved for the repository where the goal will run.
 ## Small vertical slice
 
 ```text
-Done when:     bash tests/test_login.sh exits 0 and reports "PASS: expired session rejected"
-Also green:    bash tests/run.sh exits 0
-Scope:         only edit src/session.sh; do not edit tests/test_login.sh
-Verification:  record each observed exit and pass signal; retain output when useful
-Stop:          success = both commands exit 0 with the required result
-               failure = test_login.sh fails twice without a new diagnosis
-               repeated red without progress = escalate to a human
-               stop before changing the session storage schema
+Objective:     reject expired sessions with a regression-tested authentication change
+Read first:    AGENTS.md, src/session.sh, tests/test_login.sh, authentication docs
+Constraints:   only edit src/session.sh; no new dependencies; do not edit, skip, narrow, or delete tests/test_login.sh
+Document:      update authentication docs if behavior is user-visible; otherwise record not applicable
+Validate:      bash tests/test_login.sh exits 0 and reports "PASS: expired session rejected"; bash tests/run.sh exits 0
+Checkpoint:    record each bounded slice, its evidence, and the next gate
+Stop when:     both checks exit 0 with the required result, or human/product input is required
 ```
 
 Why this is well formed:
@@ -31,13 +30,19 @@ Why this is well formed:
 ## Documentation change
 
 ```text
-Done when:     bash tests/test_docs.sh exits 0 and reports "PASS"
-Also green:    bash tests/run.sh exits 0
-Scope:         edit README.md and docs/quickstart.md; do not weaken tests/test_docs.sh
-Verification:  record observed exits and pass signals; retain output when useful
-Stop:          success = both checks exit 0
-               failure = the documentation check fails twice without progress
-               repeated red without progress = escalate to a human
+Objective:     update agent-facing documentation without changing the contract or installer behavior
+Read first:    shared/method.md, README.md, docs/quickstart.md, tests/test_docs.sh
+Scope:         edit README.md and docs/quickstart.md; preserve the existing public contract
+Constraints:   do not weaken, skip, narrow, or delete tests/test_docs.sh; no new dependencies
+Document:      update README.md and docs/quickstart.md; record any intentionally unchanged guide
+Given:         the current documentation contract tests and public guides are the baseline
+When:          the focused documentation changes are complete
+Then all of the following are true:
+- the guides describe the current agent-facing contract and remain internally consistent;
+- the installer, safety, and verification boundaries are unchanged; and
+- Validate: bash tests/test_docs.sh exits 0 and reports "PASS"; bash tests/run.sh exits 0
+Checkpoint:    record each bounded slice, its validation result, and the next gate
+Stop when:     all listed criteria and checks pass, or human/product input is required
 ```
 
 This is a contract-level check of required documentation structure. It does not prove that every

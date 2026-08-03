@@ -4,7 +4,7 @@ okf_version: "0.2"
 
 # writing-goals — as-built record
 
-This file records the implemented design as of 2026-07-28. It is a decision and compatibility
+This file records the implemented design as of 2026-08-03. It is a decision and compatibility
 record, not a promise of future work and not a replacement for the executable contracts in
 `tests/`.
 
@@ -42,6 +42,7 @@ mechanics.
 | Chaining | Protected host-owned sequential workflow | Checkpointed slices continue only in frozen order |
 | Dependencies | Bash, `jq`, and a SHA-256 utility | Keeps the implementation portable and auditable |
 | Public documentation | Outcome-led README with focused quick-start, example, and security guides | Gives users a first result without duplicating canonical policy |
+| Goal contract | Agent-facing contracts require read-first sources, explicit constraints, documentation impact, cumulative acceptance, checkpoints, qualified slice validation, pre-freeze challenge evidence, and terminal stops | Keeps the contract executable for agents while preserving the lightweight/full-tier boundary |
 | Maintainer evaluation | Unshipped profile-driven benchmark harness with a Codex adapter | Enables repeatable local comparisons without making the plugin an orchestration runtime |
 | License | MIT, copyright 2026 iliaim | Enables broad reuse with a short, standard notice obligation |
 | Community health | Repository-specific security, support, conduct, contribution, issue, and PR policies | Makes reporting and review expectations explicit |
@@ -101,6 +102,9 @@ platform constraints differ.
 - Added an MIT license and actionable security, support, conduct, contribution, issue, and pull
   request policies.
 - Added focused public guides while keeping `shared/method.md` and its linked references canonical.
+- Reconciled the agent-facing goal contract across the shared method, authoring template, native
+  adapters, public examples, and documentation tests; native Codex `/goal` is conditional on
+  active-surface availability and remains separate from protected lifecycle authority.
 
 Git history and tracked tests are the durable evidence for this work. Temporary task reports and
 local audit workspaces are intentionally ignored and are not evidence artifacts.
@@ -119,6 +123,9 @@ local audit workspaces are intentionally ignored and are not evidence artifacts.
   because state is session-keyed. Sandbox permissions must protect both surface and gate state.
 - Platform hook contracts can change. Update the adapter, its official source link, and contract
   tests together.
+- Native goal commands and availability can change. Treat them as optional adapter capabilities;
+  re-check the official source and preserve the custom protected workflow as the fallback and
+  lifecycle authority.
 - The benchmark harness is maintainer tooling, not an installed plugin feature or a containment
   boundary. It supports Codex only until another host adapter and its deterministic contracts are
   added.

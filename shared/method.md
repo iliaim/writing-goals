@@ -61,8 +61,11 @@ Classify each required fact:
   conventions, relative baselines, and candidate execution limits. Read first, record meaningful
   choices, and confirm a choice that changes product behavior or scope.
 
-For a lightweight contract, run a safe, scoped baseline check when practical. Do not run a slow,
-networked, costly, or side-effectful command merely to satisfy a rule; record why it was not run.
+For a lightweight contract, run a safe, scoped baseline check when practical. For coordinated or
+multi-turn work, after each bounded slice run the named safe validation when practical and record
+its exit/pass signal at that slice's checkpoint. If it is not practical, record the specific reason
+and the next validation gate; never require an expensive, networked, costly, or side-effectful
+command merely to satisfy a rule.
 A full protected plan requires a host-owned green baseline before maker activation.
 
 ## 4. Author a lightweight contract
@@ -70,15 +73,21 @@ A full protected plan requires a host-owned green baseline before maker activati
 Persist one concise contract for normal interactive work, then freeze it with its observed result.
 It contains:
 
-1. one observable outcome and exact scope, including protected paths;
-2. one or more cumulative acceptance criteria: state material starting conditions as **Given**, the
+1. one observable outcome and exact scope, including writable and protected paths;
+2. the exact repository, issue, specification, or other sources to read first;
+3. explicit non-goals and constraints, including unrelated code, dependency, interface, and data
+   changes that are out of scope;
+4. one or more cumulative acceptance criteria: state material starting conditions as **Given**, the
    completed action as **When**, and every independently observable success condition as **Then**;
    all listed criteria are required;
-3. an exact acceptance command and explicit pass signal, plus a specific manual observation when
+5. an exact acceptance command and explicit pass signal, plus a specific manual observation when
    automation cannot establish a criterion;
-4. relevant inherited repository checks, selected from investigation rather than copied blindly;
-5. credible alternatives considered and why each was rejected; and
-6. the observed exit/result after work, or a concise reason it could not be run.
+6. a documentation-impact decision: the exact documentation to update, or `not applicable` with
+   a reason. User-visible behavior, configuration, interfaces, and operational changes require
+   focused documentation unless a human approves the exception;
+7. relevant inherited repository checks, selected from investigation rather than copied blindly;
+8. credible alternatives considered and why each was rejected; and
+9. the observed exit/result after work, or a concise reason it could not be run.
 
 Record decisions that materially affect behavior, interfaces, data, security, verification, or
 irreversible/external actions. Always consider alternatives, but never invent a quota of fake
@@ -86,6 +95,16 @@ options. Avoid unverifiable criteria such as “works correctly”; name the exp
 decision, file, response, or other observable result instead. A lightweight contract is an
 auditable aid to review and resumption, not proof that a maker may self-certify unattended
 completion.
+
+Every contract has one terminal stop rule: stop successfully only when all cumulative criteria and
+required checks pass; stop and return to the user when product input, an absolute target, an
+irreversible/external action, a new dependency, a new ADR or decision record, or a changed objective
+is required. For coordinated or multi-turn work, each checkpoint records the current phase, the
+evidence observed, the next gate, and any blocker; progress updates should be one concise sentence.
+When monitoring a running goal, every user-facing status check follows that same one-sentence
+format and names whether the run remains on track.
+Repeated failure without a new diagnosis or materially different candidate is no-progress, not a
+new iteration.
 
 Where a host supports a native goal, its parent-level outcome and acceptance criteria must be
 self-contained, and its final acceptance check must be explicit. It may include one optional
@@ -117,7 +136,8 @@ a review outcome, unless the task is a direct one-shot edit or the user has expr
 review. A user review is ordinary conversational authorization for lightweight work; it does not
 replace the protected approval attestation required for a full plan. A phase can enable the next
 phase, but neither a completed slice nor a completed phase can complete the parent delivery
-objective.
+objective. Do not create a new ADR or decision record as an implicit deliverable; preserve and use
+an existing one when appropriate, and return to the user when a new record needs approval.
 
 ## 6. Author a full protected plan only when needed
 
@@ -139,6 +159,9 @@ The host, not this skill, selects work, dispatches roles, and resumes a run. See
 ## 7. Verify proportionately
 
 For lightweight work, record the exact commands, expected pass signals, and observed exit/result.
+For each bounded slice in coordinated or multi-turn work, record the safe slice-validation result
+or the concrete reason it was deferred and the next gate. Slice validation is incremental evidence,
+not a replacement for cumulative final acceptance or the fresh verifier required by the full tier.
 Retain or link full output when it is useful, and always retain it for a failure or investigation.
 A reviewer may rerun the named commands; a bare “tests passed” claim is never evidence.
 
@@ -163,7 +186,9 @@ least privilege, scoped writable mounts, restricted egress, protected state, and
 ## Completion checklist
 
 - The chosen tier is the lightest one that provides the needed assurance.
-- The outcome, scope, exact check, and pass signal trace to approved intent.
+- The outcome, read-first sources, scope, non-goals, exact check, and pass signal trace to approved
+  intent.
+- The documentation-impact decision and terminal stop rule are explicit.
 - Alternatives were genuinely considered and material choices are recorded.
 - A coordinated delivery plan was presented for user review before implementation, or a valid
   one-shot/review-waiver exception is recorded.

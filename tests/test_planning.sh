@@ -43,6 +43,14 @@ assert_file_contains "$template" 'Acceptance and regression checks' \
   'G03_TEMPLATE_CHECKS: lightweight template persists exact verification'
 assert_file_contains "$template" 'Alternatives considered' \
   'G03_TEMPLATE_ALTERNATIVES: lightweight template persists alternatives'
+assert_file_contains "$template" 'Read first / sources of truth' \
+  'G03_TEMPLATE_READ_FIRST: lightweight template persists read-first sources'
+assert_file_contains "$template" 'Non-goals / constraints' \
+  'G03_TEMPLATE_CONSTRAINTS: lightweight template persists non-goals and constraints'
+assert_file_contains "$template" 'Stop condition and checkpoints' \
+  'G03_TEMPLATE_STOP_RULE: lightweight template persists stop and checkpoint rules'
+assert_file_contains "$template" 'Documentation impact' \
+  'G03_TEMPLATE_DOCUMENTATION: lightweight template persists documentation impact'
 
 while IFS= read -r artifact; do
   case "$artifact" in ''|'#'*) continue ;; esac

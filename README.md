@@ -104,12 +104,13 @@ A vague request:
 Becomes a bounded contract:
 
 ```text
-Done when:     bash tests/auth/run.sh exits 0 and reports 12 passing scenarios
-Also green:    bash tests/run.sh exits 0
-Scope:         only edit src/auth/; do not edit, skip, or delete tests/auth/
-Verification:  record each observed exit and pass signal; retain output when useful
-Stop:          success = both checks pass
-               repeated red without progress = escalate to a human
+Objective:     reject expired sessions with a regression-tested authentication change
+Read first:    AGENTS.md, src/auth/, tests/auth/, existing authentication docs
+Constraints:   only edit src/auth/; no new dependencies; do not edit, skip, narrow, or delete tests/auth/
+Document:      update authentication docs if behavior or configuration is user-visible; otherwise record not applicable
+Validate:      bash tests/auth/run.sh exits 0 and reports 12 passing scenarios; bash tests/run.sh exits 0
+Checkpoints:   record the result and next gate after each bounded slice
+Stop when:     both checks pass, or further work needs product input, a new dependency/ADR, or an irreversible action
 ```
 
 The checker then returns evidence a third party can re-derive, not a summary:

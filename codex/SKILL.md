@@ -35,15 +35,35 @@ references as the task requires; this adapter adds only Codex-native integration
 
 ## Native Codex goal
 
-For a run that warrants a native Codex goal, bind one native Codex goal to the complete objective/run.
+For a run that warrants a native Codex goal, bind one native Codex goal to the complete objective/run
+only when `/goal` is available in the active Codex surface. Start it with `/goal <objective>`; use
+`/goal` to inspect it and `/goal pause`, `/goal resume`, `/goal clear`, or the documented edit
+command to control it. If `/goal` is unavailable, use `$writing-goals` and the repository's
+custom continuation workflow instead. Native goal tracking is convenience state; the protected
+host-owned workflow remains lifecycle authority for full-tier work.
+
 Put a concise, user-legible completion contract in the native `objective` field:
+
+If asked to set the goal yourself, inspect the current session, repository guidance, working tree,
+tests, and exact verification surface first. Then write the contract from those observed facts;
+use a decision packet and ask before committing when a material intent, target, or risk remains
+ambiguous.
+
+When monitoring a running goal, make each status check one concise sentence stating the current
+activity, whether the run remains on track, and the next gate.
 
 ```text
 Objective: <single completed outcome>
 
+Read first: <exact repository files, issue, specification, or decision record>
+
 Scope:
 - Included: <bounded behaviors, components, or users>
 - Excluded: <explicit non-goals>
+
+Constraints: <what must not change, including unrelated refactors, dependencies, interfaces, or data>
+
+Document: <focused documentation to update, or not applicable with a reason>
 
 Details (optional): `<stable workspace-relative path to the persisted contract or frozen plan>`
 
@@ -58,6 +78,8 @@ Then all of the following are true:
 - <authorization, edge-case, compatibility, or regression criterion>
 - Automated proof: `<exact command>` exits 0 and <relevant pass signal>.
 - Manual proof: <specific expected observation>, when automation cannot establish a criterion.
+Checkpoint: <one-sentence status summarizing the persisted checkpoint: current phase, exact evidence observed, next gate, and blocker/decision>
+Stop when: <all criteria and proof pass>, OR <human/product, irreversible, external, new dependency/ADR, or changed-objective input is required>
 ```
 
 Every `Then` criterion is cumulative and parent-level. Native completion requires evidence for all
@@ -69,6 +91,19 @@ one, redefine scope, or become lifecycle authority. Keep implementation steps, a
 per-slice checks, and lifecycle receipts in the contract or protected plan rather than the native
 goal. Do not create a native goal for a direct one-shot edit with no useful verification boundary.
 
+Use literal paths and commands. Do not delete, skip, weaken, narrow, or rewrite tests or other
+verification surfaces to make the goal pass; do not refactor unrelated code or add dependencies.
+Do not create a new ADR or decision record without human approval. If a product decision, absolute
+target, irreversible/external action, new dependency/ADR, or objective change is required, pause
+and ask before proceeding.
+
 A child handoff can never complete the parent; native completion is rejected while the parent rollup is incomplete.
 
-Source: [Codex hooks documentation](https://learn.chatgpt.com/docs/hooks).
+For coordinated or multi-turn work, the native `Checkpoint` sentence is only a summary. Persist
+the checkpoint's phase, evidence, next gate, and blocker in the `Details` target or frozen
+contract before reporting it; the native goal remains navigation and completion evidence, not the
+durable lifecycle authority.
+
+Sources: [Codex slash commands](https://learn.chatgpt.com/docs/reference/slash-commands),
+[Codex goals](https://learn.chatgpt.com/use-cases/follow-goals), and
+[Codex hooks documentation](https://learn.chatgpt.com/docs/hooks).
