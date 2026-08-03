@@ -59,10 +59,6 @@ chmod +x "$refresh_source/scripts/build-bundles.sh" "$refresh_source/scripts/ref
 refresh_suite_marker="$TEST_TMP/refresh-suite.marker"
 printf '%s\n' '#!/usr/bin/env bash' 'set -eu' '[ -n "${WG_REFRESH_SUITE_MARKER:-}" ]' 'if [ "${WG_REFRESH_EXPECT_EMPTY_TARGETS:-}" = 1 ]; then' '  [ ! -e "$HOME/.claude/skills/writing-goals" ]' '  [ ! -e "${CODEX_HOME:-$HOME/.codex}/skills/writing-goals" ]' 'fi' ': > "$WG_REFRESH_SUITE_MARKER"' > "$refresh_source/tests/run.sh"
 chmod +x "$refresh_source/tests/run.sh"
-run_command git -C "$refresh_source" add VERSION scripts/build-bundles.sh scripts/refresh-local.sh tests/run.sh
-assert_success 'G09_SAFE_REFRESH: clone stages its sequence-checking suite stub'
-run_command git -C "$refresh_source" -c user.name='writing-goals test' -c user.email='test@example.invalid' commit -qm 'test: add refresh suite stub'
-assert_success 'G09_SAFE_REFRESH: clone is clean before refresh'
 
 # Make the status assertion hermetic. GitHub's pull-request checkout is
 # detached, so the clone's inherited origin may otherwise point at the base
@@ -70,8 +66,12 @@ assert_success 'G09_SAFE_REFRESH: clone is clean before refresh'
 refresh_remote="$TEST_TMP/refresh-remote.git"
 run_command git init --bare --quiet "$refresh_remote"
 assert_success 'G09_VERSION_STATUS: local test remote is available'
-run_command git -C "$refresh_source" push --quiet "$refresh_remote" 'HEAD^:refs/heads/main'
+run_command git -C "$refresh_source" push --quiet "$refresh_remote" 'HEAD:refs/heads/main'
 assert_success 'G09_VERSION_STATUS: local test remote has the fixture predecessor'
+run_command git -C "$refresh_source" add VERSION scripts/build-bundles.sh scripts/refresh-local.sh tests/run.sh
+assert_success 'G09_SAFE_REFRESH: clone stages its sequence-checking suite stub'
+run_command git -C "$refresh_source" -c user.name='writing-goals test' -c user.email='test@example.invalid' commit -qm 'test: add refresh suite stub'
+assert_success 'G09_SAFE_REFRESH: clone is clean before refresh'
 run_command git -C "$refresh_source" remote set-url origin "$refresh_remote"
 assert_success 'G09_VERSION_STATUS: local test remote replaces the inherited origin'
 run_command git -C "$refresh_source" branch --set-upstream-to=origin/main refresh-test
