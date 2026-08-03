@@ -3,7 +3,104 @@
 set -euo pipefail
 
 usage() {
-  printf 'usage: %s --install [claude|codex|all]\n' "$0" >&2
+  printf 'usage: %s (--status | --check-updates | --install [claude|codex|all])\n' "$0" >&2
+}
+
+source_root="$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
+
+source_identity() {
+  [ -f "$source_root/VERSION" ] && [ ! -L "$source_root/VERSION" ] || return 1
+  source_version="$(tr -d '\r\n' < "$source_root/VERSION")"
+  printf '%s\n' "$source_version" | grep -Eq '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$' || return 1
+  source_revision="$(git -C "$source_root" rev-parse --verify HEAD 2>/dev/null)" || return 1
+}
+
+installed_identity() {
+  metadata="$1/shared/release-info.env"
+  [ -f "$metadata" ] && [ ! -L "$metadata" ] || return 1
+
+  metadata_format='' metadata_version='' metadata_revision='' metadata_keys=''
+  while IFS= read -r metadata_line || [ -n "$metadata_line" ]; do
+    metadata_key=${metadata_line%%=*}
+    metadata_value=${metadata_line#*=}
+    [ "$metadata_key" != "$metadata_line" ] || return 1
+    case "|$metadata_keys|" in *"|$metadata_key|"*) return 1 ;; esac
+    metadata_keys="${metadata_keys}${metadata_keys:+|}$metadata_key"
+    case "$metadata_key" in
+      format) metadata_format=$metadata_value ;;
+      version) metadata_version=$metadata_value ;;
+      revision) metadata_revision=$metadata_value ;;
+      *) return 1 ;;
+    esac
+  done < "$metadata"
+
+  [ "$metadata_format" = 1 ] &&
+    printf '%s\n' "$metadata_version" | grep -Eq '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$' &&
+    printf '%s\n' "$metadata_revision" | grep -Eq '^[0-9a-f]{40}$' || return 1
+  printf '%s\t%s\n' "$metadata_version" "$metadata_revision"
+}
+
+report_target() {
+  target_label="$1"
+  target_path="$2"
+  if [ ! -e "$target_path" ] && [ ! -L "$target_path" ]; then
+    printf '%s: not installed\n' "$target_label"
+    return
+  fi
+  identity="$(installed_identity "$target_path")" || {
+    printf '%s: unknown legacy install\n' "$target_label"
+    return
+  }
+  IFS=$'\t' read -r installed_version installed_revision <<EOF
+$identity
+EOF
+  if [ "$installed_version" = "$source_version" ] && [ "$installed_revision" = "$source_revision" ]; then
+    printf '%s: version %s revision %s (matches source)\n' "$target_label" "$installed_version" "$installed_revision"
+  else
+    printf '%s: version %s revision %s (differs from source)\n' "$target_label" "$installed_version" "$installed_revision"
+  fi
+}
+
+report_status() {
+  source_identity || {
+    printf '%s\n' 'ERROR: status requires a Git checkout with a valid VERSION file.' >&2
+    return 1
+  }
+  claude_target="$HOME/.claude/skills/writing-goals"
+  codex_target="${CODEX_HOME:-$HOME/.codex}/skills/writing-goals"
+  printf 'Source: version %s revision %s\n' "$source_version" "$source_revision"
+  report_target Claude "$claude_target"
+  report_target Codex "$codex_target"
+}
+
+check_updates() {
+  report_status || return 1
+  current_branch="$(git -C "$source_root" symbolic-ref --quiet --short HEAD 2>/dev/null)" || {
+    printf '%s\n' 'ERROR: update check requires a checked-out branch with an upstream.' >&2
+    return 1
+  }
+  upstream_remote="$(git -C "$source_root" config --get "branch.$current_branch.remote")"
+  upstream_ref="$(git -C "$source_root" config --get "branch.$current_branch.merge")"
+  case "$upstream_ref" in refs/heads/*) ;; *) printf '%s\n' 'ERROR: update check requires a branch upstream.' >&2; return 1 ;;
+  esac
+  [ -n "$upstream_remote" ] || { printf '%s\n' 'ERROR: update check requires a branch upstream.' >&2; return 1; }
+  if ! git -C "$source_root" fetch --quiet --no-tags "$upstream_remote" "$upstream_ref"; then
+    printf '%s\n' 'ERROR: unable to check the configured upstream; no files were installed or updated.' >&2
+    return 1
+  fi
+  counts="$(git -C "$source_root" rev-list --left-right --count HEAD...FETCH_HEAD)" || return 1
+  IFS=$'\t' read -r ahead behind <<EOF
+$counts
+EOF
+  if [ "$ahead" -eq 0 ] && [ "$behind" -eq 0 ]; then
+    printf '%s\n' 'Upstream: source checkout is up to date.'
+  elif [ "$ahead" -eq 0 ]; then
+    printf 'Upstream: update available; source checkout is behind by %s commit(s). Run: git pull --ff-only && bash scripts/refresh-local.sh --install all\n' "$behind"
+  elif [ "$behind" -eq 0 ]; then
+    printf 'Upstream: local checkout is ahead by %s commit(s); no update to install.\n' "$ahead"
+  else
+    printf 'Upstream: local checkout has diverged (%s ahead, %s behind); reconcile Git before installing.\n' "$ahead" "$behind"
+  fi
 }
 
 selection=all
@@ -11,6 +108,16 @@ case "${1:-}" in
   --help|-h)
     usage
     exit 0
+    ;;
+  --status)
+    [ "$#" -eq 1 ] || { usage; exit 2; }
+    report_status
+    exit $?
+    ;;
+  --check-updates)
+    [ "$#" -eq 1 ] || { usage; exit 2; }
+    check_updates
+    exit $?
     ;;
   --install)
     selection="${2:-all}"
@@ -25,7 +132,6 @@ esac
 
 case "$selection" in claude|codex|all) ;; *) usage; exit 2 ;; esac
 
-source_root="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
 cd "$source_root"
 
 git rev-parse --is-inside-work-tree >/dev/null 2>&1 || {

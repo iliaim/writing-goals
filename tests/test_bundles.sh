@@ -29,7 +29,7 @@ assert_file_contains "$second/MANIFEST.sha256" '^[0-9a-f]{64}  ' 'second bundle 
 run_command diff -ru "$first" "$second"
 assert_success 'G09 independently built bundles are byte-for-byte deterministic'
 
-for required in claude/SKILL.md codex/SKILL.md shared/method.md assets/gate.codex.sh install.sh MANIFEST.sha256; do
+for required in claude/SKILL.md codex/SKILL.md shared/method.md shared/release-info.env assets/gate.codex.sh install.sh MANIFEST.sha256; do
   TEST_COUNT=$((TEST_COUNT + 1))
   if [ -f "$first/$required" ]; then
     pass "bundle includes $required"
@@ -37,6 +37,10 @@ for required in claude/SKILL.md codex/SKILL.md shared/method.md assets/gate.code
     fail "bundle is missing $required"
   fi
 done
+
+assert_file_contains "$first/shared/release-info.env" '^format=1$' 'G09 bundle release metadata declares its format'
+assert_file_contains "$first/shared/release-info.env" '^version=0\.1\.0$' 'G09 bundle release metadata declares the product version'
+assert_file_contains "$first/shared/release-info.env" '^revision=[0-9a-f]{40}$' 'G09 bundle release metadata binds the source revision'
 
 run_command find "$first" -type l -print
 assert_empty_file "$RUN_OUT" 'G09 bundle contains no symbolic links'

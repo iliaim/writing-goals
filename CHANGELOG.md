@@ -6,14 +6,20 @@ okf_version: "0.2"
 
 All notable public changes to this project are documented in this file.
 
-The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning will begin
-when the project publishes its first supported release and declares the compatibility surface for
-that release.
+The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Product versioning
+begins at `0.1.0`; `okf_version` remains a separate document-format version. Future tagged releases
+will follow Semantic Versioning once the public compatibility surface is declared.
 
 ## [Unreleased]
 
 ### Added
 
+- Product version and source-revision metadata in portable bundles and installed copies, plus
+  explicit offline status and upstream update checks.
+- Native-goal completion-contract formats for Codex and Claude Code with bounded scope,
+  cumulative Given/When/Then criteria, exact automated evidence, and explicit manual proof where
+  automation is insufficient. A single optional `Details` pointer aids navigation but never
+  substitutes for parent-level acceptance or lifecycle authority.
 - A protected, foreground Codex continuation controller with exact-session resume, pinned trusted
   tools, sandbox isolation, durable chained receipts, a single-flight lease, and an enforceable
   no-progress stop.

@@ -6,7 +6,7 @@ description: Use when writing a Claude Code goal or completion condition, runnin
 # Writing goals for Claude Code
 
 Follow `shared/method.md` completely. It is the canonical method. Load its linked shared
-references as the task requires; this adapter adds no policy.
+references as the task requires; this adapter adds only Claude-native integration instructions.
 
 ## Invoke and trust
 
@@ -34,6 +34,47 @@ references as the task requires; this adapter adds no policy.
   block allows stopping. Use `assets/gate.claude.sh`.
 - A reported Claude Code bug can bypass pre-use policies after some background-task completions;
   this is another reason the sandbox, not the hook, is the boundary.
+
+## Native Claude goal
+
+For a run that warrants a native Claude goal, set one `/goal` condition for the complete
+objective/run. Keep it below the platform's 4,000-character limit and make it a concise,
+user-legible completion contract:
+
+```text
+Objective: <single completed outcome>
+
+Scope:
+- Included: <bounded behaviors, components, or users>
+- Excluded: <explicit non-goals>
+
+Details (optional): `<stable workspace-relative path to the persisted contract or frozen plan>`
+
+Given:
+- <material starting condition>
+
+When:
+- <completed user action or state transition>
+
+Then all of the following are true:
+- <independently observable criterion>
+- <authorization, edge-case, compatibility, or regression criterion>
+- Automated proof: `<exact command>` exits 0 and <relevant pass signal>.
+- Manual proof: <specific expected observation>, when automation cannot establish a criterion.
+```
+
+Every `Then` criterion is cumulative and parent-level: do not treat the goal as complete because
+implementation began, a subset passes, or child slices are complete. For a full plan, derive these
+criteria from the frozen `objective_acceptance`. State concrete outputs, access decisions, files,
+responses, or other observable signals; never use vague criteria such as “works correctly.”
+`Details` is navigation only: Claude's evaluator cannot read it independently, so it may explain a
+criterion but never replace one, redefine scope, or become lifecycle authority. Claude evaluates
+the conversation rather than rerunning tools, so surface the exact command, exit status, and
+relevant output in the conversation. For unattended or full-tier work, use
+`assets/gate.claude.sh` as the deterministic verification gate; the `/goal` condition is not
+independent execution evidence. Keep implementation steps, alternatives, per-slice checks, and
+lifecycle receipts in the contract or protected plan rather than the native goal. Do not use
+`/goal` for a direct one-shot edit with no useful verification boundary.
 
 Sources: [Claude goal documentation](https://code.claude.com/docs/en/goal) and
 [Claude hooks reference](https://code.claude.com/docs/en/hooks),
