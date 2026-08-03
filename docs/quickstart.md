@@ -98,7 +98,16 @@ The scripts do not create containment. Read the
 
 ## Update
 
-Run the explicit local refresh command:
+Check the installed copies and the configured upstream first:
+
+```bash
+bash scripts/refresh-local.sh --status
+bash scripts/refresh-local.sh --check-updates
+```
+
+`--status` is offline and reports the source plus installed Claude/Codex version and revision.
+`--check-updates` explicitly contacts the configured Git upstream but never pulls or installs.
+When it reports an update is available, run the explicit local refresh command:
 
 ```bash
 git pull --ff-only

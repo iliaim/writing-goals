@@ -27,6 +27,13 @@ run_command bash "$refresh" --help
 assert_success 'G09_SAFE_REFRESH: help is available without source or install changes'
 assert_contains "$(cat "$RUN_ERR")" '^usage:.*--install' 'G09_SAFE_REFRESH: help requires an explicit install flag'
 
+status_home="$TEST_TMP/status-home"
+run_command env HOME="$status_home" CODEX_HOME="$status_home/.codex" bash "$refresh" --status
+assert_success 'G09_VERSION_STATUS: offline status succeeds without installed copies'
+assert_contains "$(cat "$RUN_OUT")" '^Source: version 0\.1\.0 revision [0-9a-f]{40}$' 'G09_VERSION_STATUS: status identifies the source version and revision'
+assert_contains "$(cat "$RUN_OUT")" '^Claude: not installed$' 'G09_VERSION_STATUS: status reports a missing Claude install'
+assert_contains "$(cat "$RUN_OUT")" '^Codex: not installed$' 'G09_VERSION_STATUS: status reports a missing Codex install'
+
 run_command bash "$refresh"
 assert_nonzero 'G09_SAFE_REFRESH: default invocation refuses to change installed copies'
 assert_contains "$(cat "$RUN_ERR")" 'explicit --install' 'G09_SAFE_REFRESH: refusal explains the required authority'
@@ -43,10 +50,14 @@ assert_file_contains "$REPO_DIR/.gitignore" '^/\.archive/$' 'G09_SAFE_REFRESH: l
 refresh_source="$TEST_TMP/refresh-source"
 run_command git clone --quiet --no-hardlinks "$REPO_DIR" "$refresh_source"
 assert_success 'G09_SAFE_REFRESH: isolated refresh source clone is available'
+cp "$REPO_DIR/VERSION" "$refresh_source/VERSION"
+cp "$REPO_DIR/scripts/build-bundles.sh" "$refresh_source/scripts/build-bundles.sh"
+cp "$REPO_DIR/scripts/refresh-local.sh" "$refresh_source/scripts/refresh-local.sh"
+chmod +x "$refresh_source/scripts/build-bundles.sh" "$refresh_source/scripts/refresh-local.sh"
 refresh_suite_marker="$TEST_TMP/refresh-suite.marker"
 printf '%s\n' '#!/usr/bin/env bash' 'set -eu' '[ -n "${WG_REFRESH_SUITE_MARKER:-}" ]' 'if [ "${WG_REFRESH_EXPECT_EMPTY_TARGETS:-}" = 1 ]; then' '  [ ! -e "$HOME/.claude/skills/writing-goals" ]' '  [ ! -e "${CODEX_HOME:-$HOME/.codex}/skills/writing-goals" ]' 'fi' ': > "$WG_REFRESH_SUITE_MARKER"' > "$refresh_source/tests/run.sh"
 chmod +x "$refresh_source/tests/run.sh"
-run_command git -C "$refresh_source" add tests/run.sh
+run_command git -C "$refresh_source" add VERSION scripts/build-bundles.sh scripts/refresh-local.sh tests/run.sh
 assert_success 'G09_SAFE_REFRESH: clone stages its sequence-checking suite stub'
 run_command git -C "$refresh_source" -c user.name='writing-goals test' -c user.email='test@example.invalid' commit -qm 'test: add refresh suite stub'
 assert_success 'G09_SAFE_REFRESH: clone is clean before refresh'
@@ -68,6 +79,15 @@ else
 fi
 assert_copy_tree "$refresh_home/.claude/skills/writing-goals" 'G09_SAFE_REFRESH: refreshed Claude target is a real copy'
 assert_copy_tree "$refresh_home/.codex/skills/writing-goals" 'G09_SAFE_REFRESH: refreshed Codex target is a real copy'
+assert_file_contains "$refresh_home/.claude/skills/writing-goals/shared/release-info.env" '^version=0\.1\.0$' 'G09_VERSION_STATUS: Claude install retains release metadata'
+assert_file_contains "$refresh_home/.codex/skills/writing-goals/shared/release-info.env" '^version=0\.1\.0$' 'G09_VERSION_STATUS: Codex install retains release metadata'
+run_command env HOME="$refresh_home" CODEX_HOME="$refresh_home/.codex" bash "$refresh_script" --status
+assert_success 'G09_VERSION_STATUS: status succeeds after installation'
+assert_contains "$(cat "$RUN_OUT")" '^Claude: version 0\.1\.0 revision [0-9a-f]{40} \(matches source\)$' 'G09_VERSION_STATUS: Claude status matches the source copy'
+assert_contains "$(cat "$RUN_OUT")" '^Codex: version 0\.1\.0 revision [0-9a-f]{40} \(matches source\)$' 'G09_VERSION_STATUS: Codex status matches the source copy'
+run_command env HOME="$refresh_home" CODEX_HOME="$refresh_home/.codex" bash "$refresh_script" --check-updates
+assert_success 'G09_VERSION_STATUS: explicit upstream check succeeds against the local test remote'
+assert_contains "$(cat "$RUN_OUT")" '^Upstream: local checkout is ahead by [1-9][0-9]* commit\(s\); no update to install\.$' 'G09_VERSION_STATUS: upstream check distinguishes a local commit from an available update'
 for role in $roles; do
   TEST_COUNT=$((TEST_COUNT + 1))
   if [ -f "$refresh_home/.codex/agents/writing-goals-$role.toml" ] && [ ! -L "$refresh_home/.codex/agents/writing-goals-$role.toml" ]; then

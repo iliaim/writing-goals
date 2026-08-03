@@ -253,7 +253,17 @@ git pull --ff-only
 bash scripts/refresh-local.sh --install all
 ```
 
-The update command is an explicit human-controlled Git action. The refresh command then runs the
+Check before updating with:
+
+```bash
+bash scripts/refresh-local.sh --status
+bash scripts/refresh-local.sh --check-updates
+```
+
+`--status` is offline and shows the source plus installed Claude/Codex version and revision.
+`--check-updates` explicitly contacts the configured Git upstream and reports whether the source is
+behind, ahead, current, or diverged; it never pulls or installs. The update command remains an
+explicit human-controlled Git action. The refresh command then runs the
 contract suite, builds a new bundle, and saves only the replaced writing-goals targets under
 `.archive/writing-goals/` inside this repository before installing. Restart Codex and Claude Code afterward. The
 explicit `--install` flag is required; the command never updates in the background or touches

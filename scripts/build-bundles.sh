@@ -14,6 +14,20 @@ output="$1"
 parent="$(dirname -- "$output")"
 name="$(basename -- "$output")"
 
+[ -f "$source_root/VERSION" ] && [ ! -L "$source_root/VERSION" ] || {
+  printf 'ERROR: source version is missing or invalid\n' >&2
+  exit 1
+}
+version="$(tr -d '\r\n' < "$source_root/VERSION")"
+printf '%s\n' "$version" | grep -Eq '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$' || {
+  printf 'ERROR: source version is not a release version: %s\n' "$version" >&2
+  exit 1
+}
+revision="$(git -C "$source_root" rev-parse --verify HEAD 2>/dev/null)" || {
+  printf 'ERROR: bundle build requires a Git checkout with HEAD\n' >&2
+  exit 1
+}
+
 [ -d "$parent" ] || { printf 'ERROR: output parent does not exist: %s\n' "$parent" >&2; exit 1; }
 [ ! -e "$output" ] && [ ! -L "$output" ] || { printf 'ERROR: output already exists: %s\n' "$output" >&2; exit 1; }
 
@@ -26,6 +40,8 @@ for entry in claude codex shared assets; do
   cp -RL "$source_root/$entry" "$stage/$entry"
 done
 cp -p "$source_root/install.sh" "$stage/install.sh"
+printf 'format=1\nversion=%s\nrevision=%s\n' "$version" "$revision" > "$stage/shared/release-info.env"
+printf 'format=1\nversion=%s\nrevision=%s\n' "$version" "$revision" > "$stage/codex/shared/release-info.env"
 
 # Bundles are reproducible across checkouts: directory and file permissions do
 # not inherit a caller's umask, and the manifest is traversed in byte order.

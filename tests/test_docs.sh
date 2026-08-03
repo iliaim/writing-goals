@@ -198,7 +198,13 @@ else
 fi
 
 assert_file_contains "$refresh_script" '^  --install\)' 'refresh script implements the documented --install flag'
+assert_file_contains "$refresh_script" '^  --status\)' 'refresh script implements the documented offline status flag'
+assert_file_contains "$refresh_script" '^  --check-updates\)' 'refresh script implements the documented upstream check flag'
 assert_file_contains "$refresh_script" 'explicit --install is required' 'refresh script refuses to run without the documented explicit flag'
+assert_file_contains "$readme" 'refresh-local\.sh --status' 'README documents the offline version status command'
+assert_file_contains "$readme" 'refresh-local\.sh --check-updates' 'README documents the explicit upstream check command'
+assert_file_contains "$REPO_DIR/docs/quickstart.md" 'refresh-local\.sh --status' 'quick start documents the offline version status command'
+assert_file_contains "$REPO_DIR/docs/quickstart.md" 'refresh-local\.sh --check-updates' 'quick start documents the explicit upstream check command'
 
 documented_refresh="$(grep -Eho 'refresh-local\.sh --install [A-Za-z0-9_-]+' \
   "$readme" "$REPO_DIR/docs/quickstart.md" | awk '{ print $3 }' | sort -u)"
