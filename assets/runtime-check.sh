@@ -19,12 +19,12 @@ validate_authority_path() {
   done
   [ -d "$authority_input" ] && [ ! -L "$authority_input" ] || die 'authority must be a real directory'
 }
-authority='' identity='' plan='' run='' status=false reopen=false approval_revoked=false core_fixture='' activation_record='' activation_receipt='' approval_record='' preflight_record='' resume=false
+authority='' identity='' plan='' run='' status=false reopen=false approval_revoked=false core_fixture='' core_record='' activation_record='' activation_receipt='' approval_record='' preflight_record='' resume=false
 while [ "$#" -gt 0 ]; do
   case "$1" in
-    --authority|--identity|--plan|--run|--core-fixture|--activation-record|--activation-receipt|--approval-record|--preflight-record)
+    --authority|--identity|--plan|--run|--core-fixture|--core-record|--activation-record|--activation-receipt|--approval-record|--preflight-record)
       [ "$#" -ge 2 ] || die "missing value for $1"
-      case "$1" in --authority) authority=$2 ;; --identity) identity=$2 ;; --plan) plan=$2 ;; --run) run=$2 ;; --core-fixture) core_fixture=$2 ;; --activation-record) activation_record=$2 ;; --activation-receipt) activation_receipt=$2 ;; --approval-record) approval_record=$2 ;; --preflight-record) preflight_record=$2 ;; esac
+      case "$1" in --authority) authority=$2 ;; --identity) identity=$2 ;; --plan) plan=$2 ;; --run) run=$2 ;; --core-fixture) core_fixture=$2 ;; --core-record) core_record=$2 ;; --activation-record) activation_record=$2 ;; --activation-receipt) activation_receipt=$2 ;; --approval-record) approval_record=$2 ;; --preflight-record) preflight_record=$2 ;; esac
       shift 2 ;;
     --status) status=true; shift ;;
     --resume) resume=true; shift ;;
@@ -100,11 +100,19 @@ if [ "$plan" = p02 ]; then
   [ "$p01_tree" = 5082f46ac22677075ccbda3ae9dcaaaab730482d ] || die 'protected p01 tree binding mismatch'
 fi
 
-# This seam deliberately validates an already-selected, immutable core record.
-# It is not a scheduler: the host supplies the fixture and performs any later
-# dispatch after this command has returned.
+# The fixture path is a test seam only.  A production host supplies the one
+# authority-owned core-state.env record through --core-record; callers cannot
+# select a different live cursor.
+[ -z "$core_fixture" ] || [ -z "$core_record" ] || die 'core fixture and core record are mutually exclusive'
+if [ -n "$core_record" ]; then
+  [ "$core_record" = "$authority/core-state.env" ] || die 'core record must be authority core-state.env'
+  [ -f "$core_record" ] && [ ! -L "$core_record" ] || die 'core record must be a protected regular file'
+  if stat -f '%Lp' "$core_record" >/dev/null 2>&1; then core_record_mode=$(stat -f '%Lp' "$core_record"); else core_record_mode=$(stat -c '%a' "$core_record" 2>/dev/null) || die 'cannot inspect core record permissions'; fi
+  [ "$core_record_mode" = 600 ] || die 'core record is not protected'
+  core_fixture=$core_record
+fi
 if [ -n "$core_fixture" ] || [ "$resume" = true ]; then
-  [ -n "$core_fixture" ] && [ -n "$activation_record" ] && [ -n "$approval_record" ] && [ -n "$preflight_record" ] && [ "$resume" = true ] || die 'core fixture requires approval, preflight, activation records, and --resume'
+  [ -n "$core_fixture" ] && [ -n "$activation_record" ] && [ -n "$approval_record" ] && [ -n "$preflight_record" ] && [ "$resume" = true ] || die 'core record requires approval, preflight, activation records, and --resume'
   [ "$status" = false ] && [ "$reopen" = false ] && [ "$approval_revoked" = false ] || die 'core fixture options are incompatible with lifecycle options'
   [ -f "$core_fixture" ] && [ ! -L "$core_fixture" ] || die 'core fixture must be a regular file'
   case "$activation_record" in "$authority"/*) ;; *) die 'activation record must be inside authority' ;; esac
@@ -115,7 +123,7 @@ if [ -n "$core_fixture" ] || [ "$resume" = true ]; then
   core_identity='' core_plan='' core_run='' core_generation='' core_objective_digest='' core_plan_digest=''
   core_order='' core_states='' core_dependencies='' core_ready='' core_cursor='' core_predecessor=''
   core_checkpoint='' core_successor='' core_parallel='' core_untrusted='' core_parent='' core_result=''
-  core_current='' core_role='' core_reason='' core_completed='' core_top='' core_verifier='' core_reviewer='' core_activation_generation='' core_activation_objective='' core_activation_plan='' core_activation_order='' core_verifier_handoff=''
+  core_current='' core_role='' core_reason='' core_completed='' core_top='' core_verifier='' core_reviewer='' core_activation_generation='' core_activation_objective='' core_activation_plan='' core_activation_order='' core_verifier_handoff='' core_transition_generation='' core_previous_sha256=''
   core_keys=''
   while IFS='=' read -r key value || [ -n "${key:-}" ]; do
     case "$key" in
@@ -129,6 +137,8 @@ if [ -n "$core_fixture" ] || [ "$resume" = true ]; then
       completed_slices) target=core_completed ;; top_level_acceptance) target=core_top ;; verifier) target=core_verifier ;; reviewer) target=core_reviewer ;;
       activation_generation) target=core_activation_generation ;; activation_objective_digest) target=core_activation_objective ;; activation_plan_digest) target=core_activation_plan ;; activation_execution_order) target=core_activation_order ;;
       verifier_handoff) target=core_verifier_handoff ;;
+      transition_generation) target=core_transition_generation ;;
+      previous_core_sha256) target=core_previous_sha256 ;;
       ''|'#'*) continue ;;
       *) die 'invalid core fixture field' ;;
     esac
@@ -145,6 +155,8 @@ if [ -n "$core_fixture" ] || [ "$resume" = true ]; then
       core_completed) core_completed=$value ;; core_top) core_top=$value ;; core_verifier) core_verifier=$value ;; core_reviewer) core_reviewer=$value ;;
       core_activation_generation) core_activation_generation=$value ;; core_activation_objective) core_activation_objective=$value ;; core_activation_plan) core_activation_plan=$value ;; core_activation_order) core_activation_order=$value ;;
       core_verifier_handoff) core_verifier_handoff=$value ;;
+      core_transition_generation) core_transition_generation=$value ;;
+      core_previous_sha256) core_previous_sha256=$value ;;
     esac
   done < "$core_fixture"
   [ "$core_identity" = "$identity" ] && [ "$core_plan" = "$plan" ] && [ "$core_run" = "$run" ] || die 'core fixture binding mismatch'
@@ -152,6 +164,11 @@ if [ -n "$core_fixture" ] || [ "$resume" = true ]; then
   case "$core_objective_digest" in sha256:?*) ;; *) die 'invalid core objective digest' ;; esac
   case "$core_plan_digest" in sha256:?*) ;; *) die 'invalid core plan digest' ;; esac
   [ -n "$core_order" ] && [ -n "$core_states" ] && [ -n "$core_parent" ] && [ -n "$core_result" ] || die 'incomplete core fixture'
+  if [ -n "$core_record" ]; then
+    case "$core_transition_generation" in *[!0-9]*|'') die 'invalid core transition generation' ;; esac
+    case "$core_previous_sha256" in bootstrap|????????????????????????????????????????????????????????????????) ;; *) die 'invalid core predecessor digest' ;; esac
+    case "$core_previous_sha256" in bootstrap) ;; *[!0-9A-Fa-f]*) die 'invalid core predecessor digest' ;; esac
+  fi
   case "$core_parent" in in_progress|blocked|done|cancelled) ;; *) die 'invalid core parent state' ;; esac
 
   activation_identity='' activation_plan='' activation_run='' activation_generation='' activation_objective='' activation_plan_digest='' activation_order='' activation_keys=''

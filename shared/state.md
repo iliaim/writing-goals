@@ -21,6 +21,18 @@ candidate. It locks that explicit run, compares the protected preimage, writes
 a same-directory private temporary record, then atomically replaces the active
 record. It never selects a run or a next node.
 
+The Codex foreground supervisor additionally owns `core-state.env`,
+`continuation.env`, `continuation-state.env`, and `continuation-receipts/` inside the same
+authority. `core-state.env` is mode 0600, has the G07 cursor fields plus a monotonic
+`transition_generation` and `previous_core_sha256`, and is never supplied as a caller path.
+`continuation.env` binds one exact UUID session, pinned supervisor/checker digests, a sandbox
+profile, a separately pinned trusted advance-helper digest, and a positive no-progress cap. A
+trusted host may stage mode-0600 `core-next.env`; `assets/core-state-advance.sh` checks its exact
+preimage digest and monotonic fields, validates a private copy with the runtime checker, then
+atomically installs it as `core-state.env`. The Codex child never runs that helper. The supervisor holds its per-run lease through the
+Codex child, writes append-only mode-0600 intent/exit/advance/block/terminal receipts, and blocks
+rather than stealing a stale lease or retrying a non-monotonic cursor.
+
 The vocabulary is `pending`, `implementing`, `reviewing`, `blocked`, `done`,
 and `cancelled`. Completion requires current successful check, verifier, and
 reviewer receipts bound to the exact candidate. A protected `receipts/` store

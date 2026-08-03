@@ -38,7 +38,8 @@ acceptance check while relying on an OS-level sandbox for containment.
 | Stop-hook gate | Fresh-process execution of a trusted acceptance command | Protection if the command, surface, or state is writable by the maker |
 | Surface digest | Detection of changes after a trusted baseline | A trustworthy first baseline by itself |
 | Pre-use deny-list | Best-effort blocking of recognized cooperative mistakes | Sound shell parsing or adversarial containment |
-| Goal ledger | Resumable state and dependency visibility | A native scheduler or trusted authority |
+| Goal ledger | Resumable state and dependency visibility | A general scheduler or containment |
+| Codex continuation supervisor | One exact-session, foreground resume with durable receipts | Containment, daemon recovery, or authority over objective/plan changes |
 | OS-level sandbox | The actual containment boundary | Correct goals or verification |
 
 ## Required unattended controls
@@ -73,6 +74,51 @@ running `GATE_CMD`.
 
 Gate state outside the repository is not protected merely by location. Filesystem permissions
 must prevent the maker from modifying it.
+
+The Codex continuation supervisor is trusted host code. Invoke the installed copy, not a
+workspace copy, from a tool root the child sandbox cannot write. Its `continuation.env` pins the
+controller and checker digests; its profile must deny the child all reads/writes to the authority
+and writes to that tool root. [`../assets/codex-continuation.sb.tmpl`](../assets/codex-continuation.sb.tmpl)
+is only a minimum macOS profile: the host must still scope workspace writes, secrets, and egress.
+
+### Codex foreground continuation
+
+The trusted host creates mode-0600 `continuation.env` in the authority with exactly these fields:
+`identity`, `plan`, `run`, `session_id` (an exact UUID), `workspace`, `codex_bin`,
+`sandbox_profile`, `trusted_root`, `controller_sha256`, `runtime_path`, `runtime_sha256`, and a
+trusted `advance_path`, `advance_sha256`, and a positive `no_progress_cap`. `runtime_path`, the
+advance helper, and the installed controller all live below `trusted_root`; hash them after
+installation, not from a mutable workspace. The host also creates mode-0600 `core-state.env` with the current G07 cursor plus a numeric
+`transition_generation` and `previous_core_sha256` (`bootstrap` only for the first cursor).
+
+Then invoke the installed controller with no other configuration inputs:
+
+```bash
+bash "$CODEX_HOME/skills/writing-goals/assets/codex-continuation.sh" \
+  --authority /absolute/protected-authority \
+  --identity YYYYMMDD-ABC123 --plan p01 --run protected-run-id
+```
+
+It fails closed on an altered tool digest, any absent/unsafe authority record, an ambiguous lease,
+a Codex child failure, or a cursor that does not monotonically bind its predecessor. A local test
+double proves controller protocol only; before using this with a real run, test the installed
+profile and exact-session resume in the intended host environment.
+
+The sandboxed child never writes a cursor. Following a fresh independent check, the trusted host
+may write a mode-0600 `core-next.env` in the authority and invoke the installed advance helper
+with the SHA-256 of the current `core-state.env`:
+
+```bash
+bash "$CODEX_HOME/skills/writing-goals/assets/core-state-advance.sh" \
+  --authority /absolute/protected-authority \
+  --identity YYYYMMDD-ABC123 --plan p01 --run protected-run-id \
+  --expected-core-sha256 CURRENT_CORE_SHA256
+```
+
+The helper rejects a stale preimage or non-monotonic cursor, validates the staged record through
+the pinned runtime checker in a private authority copy, and atomically replaces the active record
+only on success. It does
+not derive a successor from model output and must never be callable from the child sandbox.
 
 ## Reporting vulnerabilities
 

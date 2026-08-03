@@ -14,6 +14,11 @@ that release.
 
 ### Added
 
+- A protected, foreground Codex continuation controller with exact-session resume, pinned trusted
+  tools, sandbox isolation, durable chained receipts, a single-flight lease, and an enforceable
+  no-progress stop.
+- A separately pinned, trusted core-state advance helper that validates a staged monotonic cursor
+  before atomically making it live; a resumed Codex child cannot write protected authority.
 - A local, profile-driven Codex benchmark harness with retained worktrees, ephemeral credential homes,
   JSON evidence, and scenario evaluators.
 - Explicit local plugin refresh with source verification and timestamped backups.

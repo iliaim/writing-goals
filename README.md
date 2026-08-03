@@ -158,9 +158,10 @@ request.
 | Another agent or deterministic process must independently confirm the result | An irreversible decision, production change, or external send lacks explicit human authorization |
 
 > [!WARNING]
-> This repository is not a sandbox, scheduler, autonomous DAG runner, or substitute for product
-> decisions. The host owns the bounded, sequential execution protocol; public documentation does
-> not create a separate continuation mechanism. Separate continuation mechanisms are out of scope.
+> This repository is not a sandbox, general scheduler, autonomous DAG runner, or substitute for
+> product decisions. Its Codex adapter includes one bounded foreground continuation supervisor for
+> an already-approved protected run; it does not install a daemon, cron service, or recovery
+> service. The host remains responsible for the sandbox, protected authority, and restart handling.
 
 ## The method in six stages
 

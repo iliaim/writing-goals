@@ -94,7 +94,7 @@ assert_file_contains "$readme" 'continue.*false|needs-human|needs human' 'README
 assert_file_contains "$readme" '\.claude/settings\.json' 'README shows Claude hook registration'
 assert_file_contains "$readme" '\.codex/hooks\.json' 'README shows Codex hook registration'
 assert_file_contains "$readme" 'bash tests/run.sh' 'README names the contract test command'
-assert_file_contains "$readme" 'out of scope' 'README says an external driver is out of scope'
+assert_file_contains "$readme" 'foreground continuation supervisor' 'README documents the bounded Codex continuation controller'
 
 assert_file_contains "$REPO_DIR/docs/quickstart.md" '## Install|## Choose' 'quick start documents installation'
 assert_file_contains "$REPO_DIR/docs/quickstart.md" 'refresh-local\.sh.*--install' 'quick start documents the explicit local refresh command'
@@ -286,6 +286,8 @@ assert_file_contains "$codex" 'host-native continuation|host native continuation
 assert_file_contains "$codex" 'non-interactive entrypoint' 'G12_HOST_NATIVE_SEQUENTIAL_SINGLE_MODEL: Codex skill retains its non-interactive boundary'
 assert_file_contains "$REPO_DIR/shared/workflow.md" 'leaves the parent in progress until every ordered slice is complete' 'G12_PARENT_CHILD_COMPLETION_DOCS: only all slices complete the parent'
 assert_file_contains "$REPO_DIR/shared/workflow.md" 'background continuation, or advance the parent' 'G12_PARENT_CHILD_COMPLETION_DOCS: a checker cannot advance the parent'
+assert_file_contains "$REPO_DIR/shared/workflow.md" 'codex-continuation\.sh' 'G12_CONTINUATION_CONTROLLER_DOCS: workflow names the protected foreground controller'
+assert_file_contains "$REPO_DIR/docs/security-model.md" 'tool root.*child sandbox|child sandbox.*tool root' 'G12_CONTINUATION_CONTROLLER_DOCS: security model protects the trusted controller and checker'
 
 # The protected-red receipt needs a stable, goal-specific failure line rather
 # than a generic assertion summary.  Keep it immediately before finish_tests

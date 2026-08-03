@@ -11,8 +11,11 @@ references as the task requires; this adapter adds no policy.
 ## Invoke and trust
 
 - Invoke as `$writing-goals`, select it from `/skills`, or allow its description to trigger it.
-- Use `codex exec` as the non-interactive entrypoint for host-native continuation in the sequential
-  workflow in `shared/workflow.md`.
+- Use the installed `assets/codex-continuation.sh` as the foreground host-native continuation
+  non-interactive entrypoint for the sequential workflow in `shared/workflow.md`. It invokes
+  `codex exec resume` only from protected authority and must run outside the maker sandbox.
+- A trusted host, never the resumed child, may use the separately pinned
+  `assets/core-state-advance.sh` to install a freshly checked, monotonic protected cursor.
 - Skill frontmatter contains only `name` and `description`; UI and invocation metadata belong in
   `agents/openai.yaml`.
 - Project hooks live in `.codex/hooks.json` or `.codex/config.toml`. Non-managed command hooks

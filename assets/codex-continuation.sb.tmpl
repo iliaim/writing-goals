@@ -1,0 +1,7 @@
+; Minimum macOS child boundary for assets/codex-continuation.sh.
+; The trusted host must narrow this further to the intended workspace and egress.
+(version 1)
+(allow default)
+(deny file-read* (subpath "__AUTHORITY__"))
+(deny file-write* (subpath "__AUTHORITY__"))
+(deny file-write* (subpath "__TRUSTED_ROOT__"))

@@ -49,7 +49,25 @@ pre-activation role. An interrupted run resumes that recorded cursor rather than
 latest task or restarting a role. A completed checkpoint permits only the recorded successor and
 leaves the parent in progress until every ordered slice is complete.
 
-`assets/runtime-check.sh --core-fixture PATH --resume` is a non-mutating validation seam for this
-protocol. It reports the recorded cursor or an explicit rejection; it does not select work,
-dispatch an agent, create background continuation, or advance the parent. A compatible host must
-perform those actions after a successful check.
+`assets/runtime-check.sh --core-fixture PATH --resume` remains a non-mutating **test** seam. It
+reports a recorded cursor or an explicit rejection; it does not select work, dispatch an agent,
+create background continuation, or advance the parent.
+
+The Codex adapter's `assets/codex-continuation.sh` foreground host supervisor accepts only an
+authority, identity, plan, and run; it derives the exact session, sandbox profile, pinned tool
+paths, and `core-state.env` cursor from protected authority records. Before every exact-session
+host resume, it reruns the protected check, holds one run-wide lease, and appends
+intent/exit/advance/block receipts. It never uses a latest session, model prose, a repository
+plan, or a caller-selected fixture as lifecycle authority. A changed cursor is progress only when
+its transition generation increases and binds the prior core digest; unchanged work reaches the
+enforced no-progress cap and blocks.
+
+The child sandbox cannot write this cursor. After a fresh protected check, a separate trusted host
+may stage mode-0600 `core-next.env` and invoke `assets/core-state-advance.sh` with the exact
+preimage digest. That helper validates a private copy before its one atomic live replacement and
+alone installs a valid, monotonic successor; it is never invoked by
+the Codex child and does not select the successor from model output.
+
+The supervisor is a synchronous local process, not a daemon, cron service, or general DAG
+scheduler. It requires an OS sandbox that denies the resumed child access to the authority and
+trusted tool root; a host restart or a stale lease is a human-reconciliation condition.
