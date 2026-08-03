@@ -50,6 +50,8 @@ assert_file_contains "$REPO_DIR/.gitignore" '^/\.archive/$' 'G09_SAFE_REFRESH: l
 refresh_source="$TEST_TMP/refresh-source"
 run_command git clone --quiet --no-hardlinks "$REPO_DIR" "$refresh_source"
 assert_success 'G09_SAFE_REFRESH: isolated refresh source clone is available'
+run_command git -C "$refresh_source" switch -C refresh-test
+assert_success 'G09_VERSION_STATUS: isolated refresh source has a dedicated checked-out test branch'
 cp "$REPO_DIR/VERSION" "$refresh_source/VERSION"
 cp "$REPO_DIR/scripts/build-bundles.sh" "$refresh_source/scripts/build-bundles.sh"
 cp "$REPO_DIR/scripts/refresh-local.sh" "$refresh_source/scripts/refresh-local.sh"
@@ -61,6 +63,19 @@ run_command git -C "$refresh_source" add VERSION scripts/build-bundles.sh script
 assert_success 'G09_SAFE_REFRESH: clone stages its sequence-checking suite stub'
 run_command git -C "$refresh_source" -c user.name='writing-goals test' -c user.email='test@example.invalid' commit -qm 'test: add refresh suite stub'
 assert_success 'G09_SAFE_REFRESH: clone is clean before refresh'
+
+# Make the status assertion hermetic. GitHub's pull-request checkout is
+# detached, so the clone's inherited origin may otherwise point at the base
+# branch instead of this fixture's known predecessor.
+refresh_remote="$TEST_TMP/refresh-remote.git"
+run_command git init --bare --quiet "$refresh_remote"
+assert_success 'G09_VERSION_STATUS: local test remote is available'
+run_command git -C "$refresh_source" push --quiet "$refresh_remote" 'HEAD^:refs/heads/main'
+assert_success 'G09_VERSION_STATUS: local test remote has the fixture predecessor'
+run_command git -C "$refresh_source" remote set-url origin "$refresh_remote"
+assert_success 'G09_VERSION_STATUS: local test remote replaces the inherited origin'
+run_command git -C "$refresh_source" branch --set-upstream-to=origin/main refresh-test
+assert_success 'G09_VERSION_STATUS: test branch tracks the local test remote'
 
 refresh_script="$refresh_source/scripts/refresh-local.sh"
 refresh_home="$TEST_TMP/refresh-home"
