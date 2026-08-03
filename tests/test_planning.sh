@@ -31,6 +31,10 @@ assert_file_contains "$workflow" 'credible alternatives.*rejection reasons|alter
   'G03_ALTERNATIVE_REJECTION: planning records credible alternatives and why rejected'
 assert_file_contains "$workflow" 'A human approves the frozen plan before' \
   'G03_APPROVAL_BARRIER: no maker dispatch or activation precedes plan approval'
+assert_file_contains "$workflow" 'user-visible review packet|review packet.*canonical plan' \
+  'G03_PLAN_REVIEW_PACKET: full-tier planning presents phases and deliverables for user review'
+assert_file_contains "$workflow" 'approve, request revision, change scope, pause, or cancel' \
+  'G03_PLAN_REVIEW_OUTCOMES: full-tier planning records the available user review outcomes'
 assert_file_contains "$template" 'Observable outcome|observable outcome' \
   'G03_TEMPLATE_OUTCOME: template persists an observable outcome field'
 assert_file_contains "$template" 'Writable paths|Protected paths' \

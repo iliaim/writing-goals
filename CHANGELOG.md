@@ -14,6 +14,10 @@ that release.
 
 ### Added
 
+- Native-goal completion-contract formats for Codex and Claude Code with bounded scope,
+  cumulative Given/When/Then criteria, exact automated evidence, and explicit manual proof where
+  automation is insufficient. A single optional `Details` pointer aids navigation but never
+  substitutes for parent-level acceptance or lifecycle authority.
 - A protected, foreground Codex continuation controller with exact-session resume, pinned trusted
   tools, sandbox isolation, durable chained receipts, a single-flight lease, and an enforceable
   no-progress stop.

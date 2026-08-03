@@ -31,26 +31,30 @@ independently executable multi-slice work.
 flowchart TD
     accTitle: Goal execution loop
     accDescr {
-      Intent leads to investigation and a written contract. A maker implements one slice.
-      Lightweight work records the observed result; full-tier checking reruns the exact command.
-      Repeated red, unclear scope, or protected lifecycle failure needs a human.
+      Session context leads to goal resolution, investigation, and a reviewable delivery plan.
+      After user review, a maker implements bounded slices and checking records the evidence.
+      Verification and validation precede authorized delivery and closure.
     }
-    A(["Intent"]) --> B["Investigate<br/>real commands, tests, CI, working tree"]
-    B --> C["Write the contract<br/>outcome · scope · checks · alternatives"]
+    A(["Session context + user message"]) --> B["Resolve the parent objective<br/>or present a decision packet"]
+    B --> C["Investigate<br/>real commands, tests, CI, working tree"]
+    C --> D["Write the delivery plan<br/>scope · phases · checks · alternatives"]
+    D --> E{"User review<br/>approve · revise · pause · cancel"}
 
     subgraph maker ["MAKER — may change code"]
-        D["Implement one slice"]
+        F["Implement and integrate<br/>one bounded slice"]
     end
 
     subgraph checker ["FRESH CHECKER — may not change code"]
-    E{"Record evidence / full-tier<br/>rerun of acceptance command"}
+    G{"Verify and validate<br/>record evidence / full-tier rerun"}
     end
 
-    C --> D
-    D --> E
-    E -->|green| F(["Complete<br/>observed result recorded"])
-    E -->|"red, iteration cap remains"| D
-    E -->|"unclear, repeated red, or<br/>protected gate failure"| G(["Needs human"])
+    E -->|"approved or expressly waived"| F
+    E -->|revise| D
+    E -->|"pause or cancel"| I(["Needs human"])
+    F --> G
+    G -->|green| H(["Deliver and close<br/>evidence and follow-up recorded"])
+    G -->|"red, iteration cap remains"| F
+    G -->|"unclear, repeated red, or<br/>protected gate failure"| I
 
     style maker stroke:#6366f1,stroke-width:2px
     style checker stroke:#b45309,stroke-width:2px
@@ -60,15 +64,17 @@ flowchart TD
     classDef done fill:#dcfce7,stroke:#22c55e,color:#14532d
     classDef halt fill:#fee2e2,stroke:#ef4444,color:#7f1d1d
     class A entry
-    class B,C,D step
-    class E check
-    class F done
-    class G halt
+    class B,C,D,F step
+    class E,G check
+    class H done
+    class I halt
 ```
 
-In text: investigate the real repository, define one observable outcome and its check, let the
-maker implement it, then record the exact observed command result. A reviewer may rerun it when
-proportionate; a full-tier checker must rerun it. Repeated red or an unclear decision stops for a
+In text: resolve the outcome from the session, investigate the real repository, and present one
+reviewable end-to-end delivery plan before implementation. After approval (or an explicit review
+waiver for a direct task), the maker implements bounded slices, then records exact verification and
+validation evidence before authorized delivery and closure. A reviewer may rerun checks when
+proportionate; a full-tier checker must rerun them. Repeated red or an unclear decision stops for a
 human, while full-tier hosts enforce a protected iteration cap.
 
 The separation is the point. A maker can announce success, but the announcement never advances the
@@ -163,14 +169,18 @@ request.
 > an already-approved protected run; it does not install a daemon, cron service, or recovery
 > service. The host remains responsible for the sandbox, protected authority, and restart handling.
 
-## The method in six stages
+## The delivery path
 
-1. **Triage** whether a goal is useful.
+1. **Triage** whether a goal is useful and resolve its parent outcome from session context.
 2. **Investigate** repository guidance, implementation, tests, CI, and the working tree.
-3. **Author** a lightweight contract for normal work, or a full protected plan only when needed.
-4. **Gate** unattended work with a trusted, deterministic, non-mutating checker.
-5. **Chain** only an approved larger specification into a shallow, resumable dependency graph.
-6. **Apply autonomy by blast radius**, recording reversible choices and stopping for external or
+3. **Plan and review** the outcome, scope, phases, evidence, risks, and delivery closure before
+   implementation.
+4. **Implement and integrate** bounded slices only after the user approves the plan, unless a
+   direct task has an explicit review waiver.
+5. **Verify and validate** the stated criteria and the underlying user need.
+6. **Deliver and close** with authorized handoff or publication, residual risks, and durable
+   evidence.
+7. **Apply autonomy by blast radius**, recording reversible choices and stopping for external or
    irreversible actions.
 
 [`shared/method.md`](shared/method.md) is the canonical policy. The README and guides summarize

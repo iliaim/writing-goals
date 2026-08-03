@@ -16,13 +16,23 @@ A lightweight contract requires:
 
 1. **Outcome and scope** — one vertical result, paths that may change, and paths that are
    protected from change.
-2. **Verification** — one exact, copy-pasteable acceptance command with a concrete pass signal;
-   relevant repository regression checks are listed separately.
-3. **Investigation record** — the selected baseline status, or why a safe baseline run was not
+2. **Delivery plan and user review** — for coordinated multi-step work, one parent delivery
+   objective; the applicable context, review, implementation, verification/validation, and
+   delivery/closure phases; their deliverables and gates; and the user's approval, revision, or
+   recorded review waiver before implementation. This is intent evidence, not lifecycle state.
+3. **Acceptance criteria** — identify material starting conditions as **Given**, the completed
+   action as **When**, and each independently observable, cumulative success condition as
+   **Then**. Every criterion is mandatory; use a concrete expected output, access decision, file,
+   response, or other observable result rather than “works correctly.”
+4. **Verification** — one exact, copy-pasteable acceptance command with a concrete pass signal,
+   plus a specific manual observation where automation cannot establish a criterion; relevant
+   repository regression checks are listed separately.
+5. **Investigation record** — the selected baseline status, or why a safe baseline run was not
    practical.
-4. **Alternatives considered** — record credible approaches and why each was rejected. Do not add
+6. **Alternatives considered** — record credible approaches and why each was rejected. Do not add
    invented alternatives just to fill a number.
-5. **Observed result** — record the executed command, exit status, and concise result. Link or
+7. **Observed result and closure** — record the executed command, exit status, concise result,
+   delivery or handoff evidence where applicable, and any residual risk or unmet requirement. Link or
    retain full output for failures and whenever it is useful for diagnosis.
 
 The maker must not edit, skip, xfail, or delete the verification surface to reach green. A build,

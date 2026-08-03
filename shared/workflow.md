@@ -12,6 +12,13 @@ smallest plan that can produce an observable outcome. A human approves the froze
 activation. The host records that approval as a protected attestation bound to the exact objective
 and plan digests.
 
+Before approval, render a user-visible review packet from the canonical plan. It shows the parent
+delivery objective, scope and non-goals, final acceptance, phase deliverables and dependencies,
+verification/validation evidence, risks, and the proposed delivery or closure result. The user may
+approve, request revision, change scope, pause, or cancel. A revision that changes the frozen
+objective or plan requires a new approval attestation; the review packet is derived from the plan
+and never becomes additional lifecycle authority.
+
 Before activation, the oracle author defines and freezes the oracle-owned verification surface.
 The host records a protected preflight baseline proving it was green and frozen before maker work.
 The maker never writes oracle-owned paths.

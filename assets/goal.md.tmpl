@@ -21,6 +21,48 @@ contract for this change.
 - **Protected paths:** <tests, policies, generated artifacts, or other paths that must not change>
 - **Baseline:** <the safe scoped command and its result, or why it was not practical to run>
 
+## Delivery plan and user review
+
+For coordinated multi-step work, keep one parent delivery objective and complete this table before
+implementation. A direct one-shot edit may record why this plan and review are not needed. This
+section records conversational intent only; it is not lifecycle state or a protected approval
+record.
+
+- **Parent delivery objective:** <end-to-end result for the user>
+- **Review exception, if any:** <direct one-shot edit or explicit user waiver>
+
+| Phase | Deliverable and evidence | Gate / review outcome |
+|---|---|---|
+| Context and intent | <active outcome or decision packet> | <resolved / decision needed> |
+| Plan and user review | <scope, non-goals, alternatives, acceptance, risks> | <approved / revise / pause / cancel> |
+| Implementation and integration | <bounded slices and integration evidence> | <proceed / rework / stop-replan> |
+| Verification and validation | <criteria proof and user-need observation> | <accepted / rework> |
+| Delivery and closure | <handoff, authorized publication, residual risks, evidence> | <complete / follow-up> |
+
+Do not implement until the user has reviewed this plan, unless the review exception above applies.
+A phase or slice can enable the next phase but cannot complete the parent delivery objective.
+
+## Completion criteria
+
+Use **Given** only for material starting conditions, **When** for the completed user action or
+state transition, and **Then** for independently observable results. Every `Then` criterion is
+mandatory; write the expected output, access decision, file, response, or other concrete signal,
+not “works correctly.”
+
+**Given:**
+
+- <material starting condition>
+
+**When:**
+
+- <completed action or state transition>
+
+**Then all of the following are true:**
+
+- <observable success criterion>
+- <observable edge case, authorization, compatibility, or regression criterion>
+- <automated or manual proof criterion, if it is itself the required result>
+
 ## Acceptance and regression checks
 
 | Purpose | Exact command | Expected signal |
@@ -29,7 +71,8 @@ contract for this change.
 | Regression / inherited check | `<command>` | <expected result> |
 
 The checker reruns these commands independently when practical. Do not weaken, skip, or edit a
-check to obtain green.
+check to obtain green. When a command cannot establish a `Then` criterion, record the precise
+manual observation required to establish it.
 
 ## Alternatives considered
 
@@ -55,6 +98,13 @@ Complete this once before freezing the contract.
 | Command | Exit | Observed signal | Output/log reference when useful |
 |---|---:|---|---|
 | `<exact command run>` | <integer> | <result> | <path or concise note> |
+
+## Delivery closure
+
+- **Delivered or handed off:** <what the user or owner received>
+- **Authorization evidence:** <approval, or not applicable>
+- **Residual risks / unmet requirements:** <none, or explicit follow-up>
+- **Closure observation:** <how the completed outcome and user need were confirmed>
 
 ## Assumptions
 
