@@ -10,14 +10,22 @@ derived from or approved for the repository where the goal will run.
 ## Small vertical slice
 
 ```text
-Done when:     bash tests/test_login.sh exits 0 and reports "PASS: expired session rejected"
-Also green:    bash tests/run.sh exits 0
-Scope:         only edit src/session.sh; do not edit tests/test_login.sh
-Verification:  record each observed exit and pass signal; retain output when useful
-Stop:          success = both commands exit 0 with the required result
-               failure = test_login.sh fails twice without a new diagnosis
-               repeated red without progress = escalate to a human
-               stop before changing the session storage schema
+Objective:     reject expired sessions with a regression-tested authentication change
+Read first:    AGENTS.md, src/session.sh, tests/test_login.sh
+Scope:         edit only src/session.sh; tests/test_login.sh and all documentation are protected
+Constraints:   no new dependencies; do not edit, skip, narrow, or delete tests/test_login.sh
+Document:      no documentation path is authorized or required for this code-only slice; derive or obtain an approved target before a separate documentation slice
+Given:         expired sessions are part of the authentication behavior under test
+When:          the focused authentication change is complete
+Then all of the following are true:
+- expired sessions are rejected;
+- the test reports "ok: expired session rejected" and "PASS: 1 assertion";
+- the full suite exits 0
+Validate:      bash tests/test_login.sh exits 0 and reports "ok: expired session rejected" and "PASS: 1 assertion"; bash tests/run.sh exits 0 with no FAIL lines
+Checkpoint:    current phase=implementation; exact evidence observed=bash tests/test_login.sh exited 0 and reported "ok: expired session rejected" and "PASS: 1 assertion"; next gate=bash tests/run.sh; blocker/decision needed=none
+No-progress stop: repeated failure without a new diagnosis or materially different candidate
+Alternatives:  expand the session storage schema -- rejected because it is out of scope for this behavior change
+Stop when:     both checks exit 0 with the required result, or human/product input is required
 ```
 
 Why this is well formed:
@@ -31,13 +39,22 @@ Why this is well formed:
 ## Documentation change
 
 ```text
-Done when:     bash tests/test_docs.sh exits 0 and reports "PASS"
-Also green:    bash tests/run.sh exits 0
-Scope:         edit README.md and docs/quickstart.md; do not weaken tests/test_docs.sh
-Verification:  record observed exits and pass signals; retain output when useful
-Stop:          success = both checks exit 0
-               failure = the documentation check fails twice without progress
-               repeated red without progress = escalate to a human
+Objective:     update agent-facing documentation without changing the contract or installer behavior
+Read first:    shared/method.md, README.md, docs/quickstart.md, tests/test_docs.sh
+Scope:         edit README.md and docs/quickstart.md; preserve the existing public contract
+Constraints:   do not weaken, skip, narrow, or delete tests/test_docs.sh; no new dependencies
+Document:      update README.md and docs/quickstart.md; record any intentionally unchanged guide
+Given:         the current documentation contract tests and public guides are the baseline
+When:          the focused documentation changes are complete
+Then all of the following are true:
+- the guides describe the current agent-facing contract and remain internally consistent;
+- the installer, safety, and verification boundaries are unchanged; and
+- the focused checks pass
+Validate:      bash tests/test_docs.sh exits 0 and reports a line matching "PASS: [0-9]+ assertions"; bash tests/run.sh exits 0 with no line matching "^FAIL:"
+Checkpoint:    current phase=documentation; exact evidence observed=bash tests/test_docs.sh exited 0 and reported PASS: [0-9]+ assertions; next gate=bash tests/run.sh; blocker/decision needed=none
+No-progress stop: repeated failure without a new diagnosis or materially different candidate
+Alternatives:  add a new guide or change installer behavior -- rejected because the public contract and installer behavior are out of scope
+Stop when:     all listed criteria and checks pass, or human/product input is required
 ```
 
 This is a contract-level check of required documentation structure. It does not prove that every

@@ -104,12 +104,22 @@ A vague request:
 Becomes a bounded contract:
 
 ```text
-Done when:     bash tests/auth/run.sh exits 0 and reports 12 passing scenarios
-Also green:    bash tests/run.sh exits 0
-Scope:         only edit src/auth/; do not edit, skip, or delete tests/auth/
-Verification:  record each observed exit and pass signal; retain output when useful
-Stop:          success = both checks pass
-               repeated red without progress = escalate to a human
+Objective:     reject expired sessions with a regression-tested authentication change
+Read first:    AGENTS.md, src/auth/, tests/auth/
+Scope:         edit only src/auth/; tests/auth/ and all documentation are protected
+Constraints:   no new dependencies; do not edit, skip, narrow, or delete tests/auth/
+Document:      no documentation path is authorized or required for this code-only slice; derive or obtain an approved target before a separate documentation slice
+Given:         expired-session handling and the authentication test surface are the current baseline
+When:          the focused authentication change is complete
+Then all of the following are true:
+- expired sessions are rejected;
+- bash tests/auth/run.sh exits 0 and reports "PASS: 12 scenarios";
+- bash tests/run.sh exits 0 with no FAIL lines
+Validate:      bash tests/auth/run.sh exits 0 and reports "PASS: 12 scenarios"; bash tests/run.sh exits 0 with no FAIL lines
+Checkpoint:    current phase=implementation; exact evidence observed=bash tests/auth/run.sh exited 0 and reported "PASS: 12 scenarios"; next gate=bash tests/run.sh; blocker/decision needed=none
+Alternatives:  edit tests/auth/ or broaden the change beyond src/auth/ -- rejected because the acceptance surface must remain protected and the scope is bounded
+No-progress stop: repeated failure without a new diagnosis or materially different candidate
+Stop when:     both checks pass, or further work needs product input, a new dependency/ADR, or an irreversible action
 ```
 
 The checker then returns evidence a third party can re-derive, not a summary:

@@ -17,8 +17,10 @@ contract for this change.
 
 - **Observable outcome:** <one externally checkable result>
 - **Task class:** <behavioral_code | docs_config | refactor | research_design>
+- **Read first / sources of truth:** <exact repository files, issue, specification, or decision record>
 - **Writable paths:** <specific files or directories>
 - **Protected paths:** <tests, policies, generated artifacts, or other paths that must not change>
+- **Non-goals / constraints:** <unrelated refactors, dependencies, interfaces, data, or other exclusions>
 - **Baseline:** <the safe scoped command and its result, or why it was not practical to run>
 
 ## Delivery plan and user review
@@ -74,6 +76,32 @@ The checker reruns these commands independently when practical. Do not weaken, s
 check to obtain green. When a command cannot establish a `Then` criterion, record the precise
 manual observation required to establish it.
 
+## Stop condition and checkpoints
+
+- **Success stop:** <stop only when every `Then` criterion and required check passes>
+- **Human-needed stop:** <product input, absolute target, irreversible/external action, new dependency or ADR, or changed objective>
+- **No-progress stop:** <for example, the same failure twice without a new diagnosis or materially different candidate>
+
+For coordinated or multi-turn work, record one concise checkpoint at each phase boundary:
+
+| Checkpoint | Evidence observed | Next gate | Blocker / decision needed |
+|---|---|---|---|
+| <phase or slice> | <exact result> | <next acceptance or review> | <none or explicit decision> |
+
+Keep user-facing progress updates to one sentence: current activity, whether the goal remains on
+track, and the next gate.
+
+For each bounded slice in coordinated or multi-turn work, record the safe slice validation result
+or the specific reason it was deferred and the next validation gate. Do not treat this incremental
+check as a replacement for cumulative final acceptance.
+
+## Pre-freeze challenge
+
+- **Reread:** <this contract and every listed read-first source>
+- **Challenge checks:** <scope/constraints, cumulative acceptance, exact validation, documentation impact, stop rules, assumptions>
+- **Challenge result:** <pass + evidence reviewed, or unresolved issue + evidence>
+- **Freeze rule:** <do not freeze while a material challenge issue remains unresolved>
+
 ## Alternatives considered
 
 | Alternative | Why rejected |
@@ -81,6 +109,15 @@ manual observation required to establish it.
 | <credible option> | <why it is less suitable here> |
 
 Record the credible alternatives actually considered; do not invent a quota of artificial options.
+
+## Documentation impact
+
+- **Documentation to update:** <exact focused files, or `not applicable` with a reason>
+- **User-visible/configuration/interface/operational change:** <yes or no>
+- **Documentation proof:** <exact check or manual observation, when applicable>
+
+Do not create a new ADR or decision record as an implicit deliverable. Preserve an existing record
+when appropriate and return to the user if a new one needs approval.
 
 ## Escalate instead of guessing when
 

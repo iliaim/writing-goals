@@ -9,6 +9,39 @@ template="$REPO_DIR/assets/goal.md.tmpl"
 readme="$REPO_DIR/README.md"
 codex_metadata="$REPO_DIR/codex/agents/openai.yaml"
 
+extract_fenced_block() {
+  local file="$1" heading="$2"
+  awk -v heading="$heading" '
+    $0 == "## " heading { in_section=1; next }
+    in_section && /^## / { exit }
+    in_section && !opened && /^```text$/ { opened=1; next }
+    in_section && opened && /^```$/ { closed=1; exit }
+    in_section && opened && $0 != "" { has_body=1; print }
+    END {
+      if (!in_section || !opened || !closed || !has_body) exit 2
+    }
+  ' "$file"
+}
+
+assert_example_shape() {
+  local contract="$1" label="$2"
+  assert_contains "$contract" '^Objective:[[:space:]]+[^[:space:]]' "$label has a concrete objective"
+  assert_contains "$contract" '^Read first:[[:space:]]+[^[:space:]]' "$label names exact read-first sources"
+  assert_contains "$contract" '^Scope:[[:space:]]+[^[:space:]]' "$label names an explicit scope"
+  assert_contains "$contract" '^Constraints:[[:space:]]+[^[:space:]]' "$label names explicit constraints"
+  assert_contains "$contract" '^Document:[[:space:]]+[^[:space:]]' "$label records documentation impact"
+  assert_contains "$contract" '^Given:[[:space:]]+[^[:space:]]' "$label has concrete starting conditions"
+  assert_contains "$contract" '^When:[[:space:]]+[^[:space:]]' "$label has a concrete completed action"
+  assert_contains "$contract" '^Then all of the following are true:' "$label uses cumulative acceptance"
+  assert_contains "$contract" '^- [^[:space:]].*;' "$label has substantive acceptance criteria"
+  assert_contains "$contract" '^Validate:[[:space:]]+[^[:space:]]+.*exits 0' "$label names an exact validation command"
+  assert_contains "$contract" '^Checkpoint:[[:space:]]+current phase=[^;]+; exact evidence observed=[^;]+; next gate=[^;]+; blocker/decision needed=[^[:space:]]+' "$label has canonical checkpoint fields"
+  assert_contains "$contract" '^Alternatives:[[:space:]]+[^[:space:]]+.*rejected' "$label records a rejected alternative"
+  assert_contains "$contract" '^No-progress stop:[[:space:]]+[^[:space:]]+' "$label records a no-progress stop"
+  assert_contains "$contract" '^Stop when:[[:space:]]+[^[:space:]]+' "$label records a terminal stop"
+  assert_not_contains "$contract" 'Done when:|Also green:|^Verification:|^Stop:|failure[[:space:]]*=|max_iterations' "$label has no superseded contract labels"
+}
+
 assert_file_contains "$method" 'lightest useful tier|Choose.*tier' 'canonical shared method documents triage'
 assert_file_contains "$method" 'investigat' 'canonical shared method documents investigation'
 assert_file_contains "$method" 'MUST-ASK|DERIVE' 'canonical shared method documents fact classification'
@@ -25,6 +58,13 @@ assert_file_contains "$method" 'autonom' 'canonical shared method documents auto
 assert_file_contains "$method" 'Iteration caps.*enforceable|iteration cap' 'canonical method requires an enforceable iteration limit for the full tier'
 assert_file_contains "$method" 'Time and cost.*estimates|time and cost.*estimates' 'canonical method does not promise unenforceable time or cost stops'
 assert_file_contains "$method" 'protected preflight.*baseline|preflight record' 'canonical method requires protected preflight before full-tier maker work'
+assert_file_contains "$method" 'read first|read-first' 'canonical method records exact sources to read before authoring'
+assert_file_contains "$method" 'non-goals|constraints' 'canonical method requires explicit non-goals and constraints'
+assert_file_contains "$method" 'documentation-impact|documentation impact' 'canonical method requires a documentation-impact decision'
+assert_file_contains "$method" 'terminal stop rule|stop successfully only when' 'canonical method requires one terminal stop rule'
+assert_file_contains "$method" 'new ADR|decision record' 'canonical method requires human review for new decision records'
+assert_file_contains "$method" 'checkpoint.*current phase|current phase.*checkpoint' 'canonical method binds checkpoints to evidence and the next gate'
+assert_file_contains "$method" 'every user-facing status check' 'canonical method requires concise monitoring updates'
 assert_file_contains "$claude" 'shared/method.md' 'Claude adapter mandates the canonical shared method'
 assert_file_contains "$codex" 'shared/method.md' 'Codex adapter mandates the canonical shared method'
 assert_file_contains "$claude" '4,?000' 'Claude adapter documents the official 4,000-character condition limit'
@@ -41,7 +81,15 @@ assert_file_contains "$codex" 'do not infer coverage.*other tool.*payload shape'
 assert_not_contains "$(cat "$codex")" 'MCP|Hosted tools|write_stdin' 'Codex adapter makes no stale broad coverage claim'
 assert_file_contains "$claude" 'https://code.claude.com/docs/' 'Claude platform facts cite official documentation'
 assert_file_contains "$codex" 'https://learn.chatgpt.com/docs/hooks' 'Codex platform facts cite official documentation'
-assert_not_contains "$(cat "$codex")" '/goal' 'Codex adapter makes no unsupported /goal claim'
+assert_file_contains "$codex" '/goal <objective>' 'Codex adapter documents the conditional native /goal invocation'
+assert_file_contains "$codex" '`/goal` to inspect it and the goal progress controls above the composer' 'Codex adapter documents native goal UI controls'
+assert_file_contains "$codex" 'pause or resume the goal' 'Codex adapter documents goal pause/resume UI controls'
+assert_file_contains "$codex" 'edit the goal text, or clear the goal' 'Codex adapter documents goal edit/clear UI controls'
+assert_file_contains "$codex" 'codex exec resume' 'Codex adapter preserves the protected continuation command'
+assert_not_contains "$(cat "$codex")" '/goal[[:space:]]+(pause|resume|clear)([[:space:]]|$)' 'Codex adapter has no unsupported slash lifecycle commands'
+assert_not_contains "$(cat "$codex")" 'documented[[:space:]]+edit[[:space:]]+command' 'Codex adapter has no unsupported edit command wording'
+assert_file_contains "$codex" 'only when.*available|when.*available.*active Codex surface' 'Codex adapter bounds native /goal applicability'
+assert_file_contains "$codex" 'Codex slash commands|reference/slash-commands' 'Codex adapter cites current native goal command documentation'
 assert_not_contains "$(cat "$codex_metadata")" '/goal' 'Codex UI metadata makes no unsupported /goal claim'
 assert_not_contains "$(cat "$REPO_DIR/shared/autonomy.md")" 'Codex caveat:.*shell only|PreToolUse.*intercepts.*shell only' 'shared autonomy policy has no stale Codex shell-only claim'
 shared_policy="$(cat "$REPO_DIR"/shared/*.md)"
@@ -52,6 +100,14 @@ assert_not_contains "$(cat "$template")" 'status:|drives run-loop' 'lightweight 
 assert_file_contains "$template" 'Alternatives considered' 'lightweight template records alternatives'
 assert_file_contains "$template" 'Observed verification result' 'lightweight template records observed verification evidence'
 assert_file_contains "$template" 'Time and cost.*estimates' 'lightweight template avoids unenforceable hard time/cost stops'
+assert_file_contains "$template" 'Read first / sources of truth' 'lightweight template records exact read-first sources'
+assert_file_contains "$template" 'Non-goals / constraints' 'lightweight template records explicit constraints'
+assert_file_contains "$template" 'Stop condition and checkpoints' 'lightweight template records terminal stops and checkpoints'
+assert_file_contains "$template" 'Success stop' 'lightweight template records the cumulative success stop'
+assert_file_contains "$template" 'Human-needed stop' 'lightweight template records human escalation stops'
+assert_file_contains "$template" 'No-progress stop' 'lightweight template records a no-progress stop'
+assert_file_contains "$template" 'Documentation impact' 'lightweight template records documentation impact'
+assert_file_contains "$template" 'Do not create a new ADR' 'lightweight template does not create implicit decision records'
 assert_file_contains "$method" 'Given' 'canonical shared method requires explicit acceptance criteria'
 assert_file_contains "$method" 'When' 'canonical shared method requires explicit acceptance criteria'
 assert_file_contains "$method" 'Then' 'canonical shared method requires explicit acceptance criteria'
@@ -70,6 +126,18 @@ assert_file_contains "$template" 'Plan and user review' 'lightweight template re
 assert_file_contains "$template" 'Verification and validation' 'lightweight template distinguishes verification from validation'
 assert_file_contains "$template" '## Delivery closure' 'lightweight template records delivery completion and follow-up'
 assert_file_contains "$codex_metadata" 'end-to-end delivery outcome.*reviewable staged plan' 'Codex default prompt asks for contextual outcome resolution and plan review'
+assert_file_contains "$codex_metadata" 'read-first sources.*non-goals.*documentation impact.*checkpoints' 'Codex default prompt carries the complete lightweight contract cues'
+for adapter in "$claude" "$codex"; do
+  assert_file_contains "$adapter" 'Read first:' 'native goal records exact read-first sources'
+  assert_file_contains "$adapter" 'Constraints:' 'native goal records explicit constraints'
+  assert_file_contains "$adapter" 'Document:' 'native goal records documentation impact'
+  assert_file_contains "$adapter" 'Checkpoint:' 'native goal records checkpoint updates'
+  assert_file_contains "$adapter" 'each status check' 'native goal requires concise monitoring updates'
+  assert_file_contains "$adapter" 'Stop when:' 'native goal records a terminal stop condition'
+  assert_file_contains "$adapter" 'set the goal yourself|self' 'native goal requires inspect-first self-authoring'
+  assert_file_contains "$adapter" 'narrow.*verification|weaken, narrow' 'native goal forbids verification-surface narrowing'
+  assert_file_contains "$adapter" 'new ADR|decision record' 'native goal requires approval for new decision records'
+done
 assert_file_contains "$REPO_DIR/shared/autonomy.md" 'Class 3' 'autonomy policy names Class 3 actions'
 assert_file_contains "$REPO_DIR/shared/autonomy.md" 'explicit.*bounded.*human|human.*bounded.*authori' 'Class 3 external or spending actions require bounded human authority'
 assert_file_contains "$REPO_DIR/shared/autonomy.md" 'Class 4' 'autonomy policy names Class 4 actions'
@@ -226,8 +294,56 @@ while read -r refresh_selection; do
   fi
 done <<< "$documented_refresh"
 
-assert_file_contains "$REPO_DIR/docs/examples.md" 'Done when:|Done when ' 'examples include a completion contract'
-assert_file_contains "$REPO_DIR/docs/examples.md" 'observed exit|exact command' 'examples require reproducible evidence'
+small_vertical_contract=""
+small_vertical_status=0
+small_vertical_contract="$(extract_fenced_block "$REPO_DIR/docs/examples.md" 'Small vertical slice')" || small_vertical_status=$?
+TEST_COUNT=$((TEST_COUNT + 1))
+if [ "$small_vertical_status" -eq 0 ] && [ -n "$small_vertical_contract" ]; then
+  pass 'documentation examples extract the complete Small vertical slice fence'
+else
+  fail 'documentation examples extract the complete Small vertical slice fence'
+fi
+
+docs_example_contract=""
+docs_example_status=0
+docs_example_contract="$(extract_fenced_block "$REPO_DIR/docs/examples.md" 'Documentation change')" || docs_example_status=$?
+TEST_COUNT=$((TEST_COUNT + 1))
+if [ "$docs_example_status" -eq 0 ] && [ -n "$docs_example_contract" ]; then
+  pass 'documentation examples extract the complete Documentation change fence'
+else
+  fail 'documentation examples extract the complete Documentation change fence'
+fi
+
+readme_example_contract=""
+readme_example_status=0
+readme_example_contract="$(extract_fenced_block "$readme" 'Worked example')" || readme_example_status=$?
+TEST_COUNT=$((TEST_COUNT + 1))
+if [ "$readme_example_status" -eq 0 ] && [ -n "$readme_example_contract" ]; then
+  pass 'documentation examples extract the complete README Worked example fence'
+else
+  fail 'documentation examples extract the complete README Worked example fence'
+fi
+
+assert_example_shape "$small_vertical_contract" 'small vertical slice example'
+assert_example_shape "$docs_example_contract" 'documentation change example'
+assert_example_shape "$readme_example_contract" 'README worked example'
+assert_contains "$small_vertical_contract" 'ok: expired session rejected' 'small vertical slice binds the behavioral pass signal'
+assert_contains "$small_vertical_contract" 'PASS: 1 assertion' 'small vertical slice binds the assertion pass signal'
+assert_not_contains "$small_vertical_contract" 'PASS: expired session rejected' 'small vertical slice rejects its superseded pass signal'
+assert_contains "$small_vertical_contract" 'bash tests/run.sh exits 0 with no FAIL lines' 'small vertical slice binds the full-suite failure signal'
+assert_contains "$docs_example_contract" 'bash tests/test_docs.sh exits 0 and reports a line matching "PASS: \[0-9\][+][[:space:]]+assertions"' 'documentation example binds the exact documentation-test pass pattern'
+assert_contains "$docs_example_contract" 'bash tests/run.sh exits 0 with no line matching "\^FAIL:"' 'documentation example binds the full-suite failure pattern'
+assert_not_contains "$docs_example_contract" 'reports "PASS"' 'documentation example rejects generic PASS wording'
+assert_contains "$readme_example_contract" 'PASS: 12 scenarios' 'README worked example preserves its exact pass signal'
+assert_not_contains "$readme_example_contract" '12 passing scenarios' 'README worked example rejects its inexact pass signal'
+assert_contains "$readme_example_contract" 'bash tests/run.sh exits 0 with no FAIL lines' 'README worked example binds the full-suite failure signal'
+assert_file_contains "$method" 'after each bounded slice.*when practical|each bounded slice.*safe validation' 'canonical method qualifies incremental slice validation'
+assert_file_contains "$template" 'Slice validation|slice validation' 'lightweight template records incremental validation or deferral'
+assert_file_contains "$REPO_DIR/shared/author-goal.md" 'fresh-context challenge.*reread|reread.*read-first sources' 'authoring guidance makes challenge procedure executable'
+assert_file_contains "$template" '## Pre-freeze challenge' 'lightweight template records pre-freeze challenge evidence'
+assert_file_contains "$template" 'Challenge result' 'lightweight template records challenge outcome'
+assert_file_contains "$claude" 'phase, exact evidence observed, next gate, and blocker' 'Claude binds checkpoint summary to durable evidence fields'
+assert_file_contains "$codex" 'phase, exact evidence observed, next gate, and blocker' 'Codex binds checkpoint summary to durable evidence fields'
 assert_not_contains "$(sed -n '1,55p' "$REPO_DIR/docs/examples.md")" 'max_iterations' 'ordinary examples do not imply a universal iteration cap'
 assert_file_contains "$method" 'freeze it when that result is recorded' 'lightweight drafting is finalized only after observed evidence'
 assert_file_contains "$readme" 'full-tier.*fresh checker|full tier.*reruns' 'README scopes fresh verification to the full tier'

@@ -72,12 +72,16 @@ targets must come from you; repository paths and commands should come from inves
 A well-formed contract names:
 
 1. one observable outcome;
-2. an exact, copy-pasteable acceptance command;
-3. the specific exit code, string, or number that means success;
-4. paths that may and may not change;
-5. inherited repository checks;
-6. observed exit/result evidence, with full output retained or linked when useful; and
-7. escalation conditions for unclear or repeatedly failing work.
+2. the exact sources to read first;
+3. explicit non-goals and constraints;
+4. an exact, copy-pasteable acceptance command;
+5. the specific exit code, string, or number that means success;
+6. paths that may and may not change;
+7. a documentation-impact decision;
+8. a terminal success stop, human-needed stop, and no-progress rule;
+9. inherited repository checks;
+10. observed exit/result evidence, with full output retained or linked when useful; and
+11. checkpoint evidence for coordinated or multi-turn work.
 
 If any of these are missing, revise the contract before running it.
 

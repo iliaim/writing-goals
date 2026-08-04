@@ -14,8 +14,8 @@ see what was intended, but it never drives lifecycle state or authorizes activat
 
 A lightweight contract requires:
 
-1. **Outcome and scope** — one vertical result, paths that may change, and paths that are
-   protected from change.
+1. **Outcome and scope** — one vertical result, exact sources to read first, paths that may
+   change, paths protected from change, and explicit non-goals or constraints.
 2. **Delivery plan and user review** — for coordinated multi-step work, one parent delivery
    objective; the applicable context, review, implementation, verification/validation, and
    delivery/closure phases; their deliverables and gates; and the user's approval, revision, or
@@ -27,16 +27,23 @@ A lightweight contract requires:
 4. **Verification** — one exact, copy-pasteable acceptance command with a concrete pass signal,
    plus a specific manual observation where automation cannot establish a criterion; relevant
    repository regression checks are listed separately.
-5. **Investigation record** — the selected baseline status, or why a safe baseline run was not
+5. **Stop condition and checkpoints** — the cumulative success stop, human-needed stop, and
+   no-progress rule; for coordinated or multi-turn work, concise checkpoint evidence and the next
+   gate.
+6. **Documentation impact** — exact focused documentation updates for user-visible behavior,
+   configuration, interfaces, or operations, or `not applicable` with a reason.
+7. **Investigation record** — the selected baseline status, or why a safe baseline run was not
    practical.
-6. **Alternatives considered** — record credible approaches and why each was rejected. Do not add
+8. **Alternatives considered** — record credible approaches and why each was rejected. Do not add
    invented alternatives just to fill a number.
-7. **Observed result and closure** — record the executed command, exit status, concise result,
+9. **Observed result and closure** — record the executed command, exit status, concise result,
    delivery or handoff evidence where applicable, and any residual risk or unmet requirement. Link or
    retain full output for failures and whenever it is useful for diagnosis.
 
-The maker must not edit, skip, xfail, or delete the verification surface to reach green. A build,
-typecheck, or lint is a proxy unless it exercises the requested behavior; label it honestly.
+The maker must not edit, skip, xfail, delete, weaken, or narrow the verification surface to reach
+green. Do not refactor unrelated code or add dependencies unless the approved scope and acceptance
+criteria require it. A build, typecheck, or lint is a proxy unless it exercises the requested
+behavior; label it honestly.
 
 ## Full protected plan — exceptional path
 
@@ -51,5 +58,11 @@ then changes only maker-owned paths. A fresh verifier and reviewer rerun and ins
 
 Do not treat a maker’s prose as proof. A lightweight reviewer reruns the named command when the
 risk warrants it; the full tier always does. Stop and escalate on a blocked baseline, an unclear
-acceptance target, a required external action, or repeated no-progress. An iteration cap may be
-enforced by the full-tier host; time and cost are estimates unless the host measures them.
+acceptance target, a required external action, a new ADR or dependency, or repeated no-progress.
+For a non-trivial contract, before freezing it perform a fresh-context challenge: reread the
+contract and its read-first sources, then check scope and constraints, cumulative acceptance,
+exact validation, documentation impact, stop rules, and assumptions. Record `Challenge result` in
+the contract as `pass` with the evidence reviewed, or as an unresolved issue with its evidence;
+do not freeze while a material gap remains. A second agent may perform this pass, but the result is
+evidence only and never lifecycle authority. An iteration cap may be enforced by the full-tier host;
+time and cost are estimates unless the host measures them.
