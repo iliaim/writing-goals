@@ -11,11 +11,20 @@ derived from or approved for the repository where the goal will run.
 
 ```text
 Objective:     reject expired sessions with a regression-tested authentication change
-Read first:    AGENTS.md, src/session.sh, tests/test_login.sh, authentication docs
-Constraints:   only edit src/session.sh; no new dependencies; do not edit, skip, narrow, or delete tests/test_login.sh
-Document:      update authentication docs if behavior is user-visible; otherwise record not applicable
-Validate:      bash tests/test_login.sh exits 0 and reports "PASS: expired session rejected"; bash tests/run.sh exits 0
-Checkpoint:    record each bounded slice, its evidence, and the next gate
+Read first:    AGENTS.md, src/session.sh, tests/test_login.sh
+Scope:         edit only src/session.sh; tests/test_login.sh and all documentation are protected
+Constraints:   no new dependencies; do not edit, skip, narrow, or delete tests/test_login.sh
+Document:      no documentation path is authorized or required for this code-only slice; derive or obtain an approved target before a separate documentation slice
+Given:         expired sessions are part of the authentication behavior under test
+When:          the focused authentication change is complete
+Then all of the following are true:
+- expired sessions are rejected;
+- the test reports "ok: expired session rejected" and "PASS: 1 assertion";
+- the full suite exits 0
+Validate:      bash tests/test_login.sh exits 0 and reports "ok: expired session rejected" and "PASS: 1 assertion"; bash tests/run.sh exits 0 with no FAIL lines
+Checkpoint:    current phase=implementation; exact evidence observed=bash tests/test_login.sh exited 0 and reported "ok: expired session rejected" and "PASS: 1 assertion"; next gate=bash tests/run.sh; blocker/decision needed=none
+No-progress stop: repeated failure without a new diagnosis or materially different candidate
+Alternatives:  expand the session storage schema -- rejected because it is out of scope for this behavior change
 Stop when:     both checks exit 0 with the required result, or human/product input is required
 ```
 
@@ -40,8 +49,11 @@ When:          the focused documentation changes are complete
 Then all of the following are true:
 - the guides describe the current agent-facing contract and remain internally consistent;
 - the installer, safety, and verification boundaries are unchanged; and
-- Validate: bash tests/test_docs.sh exits 0 and reports "PASS"; bash tests/run.sh exits 0
-Checkpoint:    record each bounded slice, its validation result, and the next gate
+- the focused checks pass
+Validate:      bash tests/test_docs.sh exits 0 and reports a line matching "PASS: [0-9]+ assertions"; bash tests/run.sh exits 0 with no line matching "^FAIL:"
+Checkpoint:    current phase=documentation; exact evidence observed=bash tests/test_docs.sh exited 0 and reported PASS: [0-9]+ assertions; next gate=bash tests/run.sh; blocker/decision needed=none
+No-progress stop: repeated failure without a new diagnosis or materially different candidate
+Alternatives:  add a new guide or change installer behavior -- rejected because the public contract and installer behavior are out of scope
 Stop when:     all listed criteria and checks pass, or human/product input is required
 ```
 

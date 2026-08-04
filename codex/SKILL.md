@@ -37,10 +37,10 @@ references as the task requires; this adapter adds only Codex-native integration
 
 For a run that warrants a native Codex goal, bind one native Codex goal to the complete objective/run
 only when `/goal` is available in the active Codex surface. Start it with `/goal <objective>`; use
-`/goal` to inspect it and `/goal pause`, `/goal resume`, `/goal clear`, or the documented edit
-command to control it. If `/goal` is unavailable, use `$writing-goals` and the repository's
-custom continuation workflow instead. Native goal tracking is convenience state; the protected
-host-owned workflow remains lifecycle authority for full-tier work.
+`/goal` to inspect it and the goal progress controls above the composer to pause or resume the goal,
+edit the goal text, or clear the goal. If `/goal` is unavailable, use `$writing-goals` and the
+repository's custom continuation workflow instead. Native goal tracking is convenience state; the
+protected host-owned workflow remains lifecycle authority for full-tier work.
 
 Put a concise, user-legible completion contract in the native `objective` field:
 

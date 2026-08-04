@@ -9,6 +9,39 @@ template="$REPO_DIR/assets/goal.md.tmpl"
 readme="$REPO_DIR/README.md"
 codex_metadata="$REPO_DIR/codex/agents/openai.yaml"
 
+extract_fenced_block() {
+  local file="$1" heading="$2"
+  awk -v heading="$heading" '
+    $0 == "## " heading { in_section=1; next }
+    in_section && /^## / { exit }
+    in_section && !opened && /^```text$/ { opened=1; next }
+    in_section && opened && /^```$/ { closed=1; exit }
+    in_section && opened && $0 != "" { has_body=1; print }
+    END {
+      if (!in_section || !opened || !closed || !has_body) exit 2
+    }
+  ' "$file"
+}
+
+assert_example_shape() {
+  local contract="$1" label="$2"
+  assert_contains "$contract" '^Objective:[[:space:]]+[^[:space:]]' "$label has a concrete objective"
+  assert_contains "$contract" '^Read first:[[:space:]]+[^[:space:]]' "$label names exact read-first sources"
+  assert_contains "$contract" '^Scope:[[:space:]]+[^[:space:]]' "$label names an explicit scope"
+  assert_contains "$contract" '^Constraints:[[:space:]]+[^[:space:]]' "$label names explicit constraints"
+  assert_contains "$contract" '^Document:[[:space:]]+[^[:space:]]' "$label records documentation impact"
+  assert_contains "$contract" '^Given:[[:space:]]+[^[:space:]]' "$label has concrete starting conditions"
+  assert_contains "$contract" '^When:[[:space:]]+[^[:space:]]' "$label has a concrete completed action"
+  assert_contains "$contract" '^Then all of the following are true:' "$label uses cumulative acceptance"
+  assert_contains "$contract" '^- [^[:space:]].*;' "$label has substantive acceptance criteria"
+  assert_contains "$contract" '^Validate:[[:space:]]+[^[:space:]]+.*exits 0' "$label names an exact validation command"
+  assert_contains "$contract" '^Checkpoint:[[:space:]]+current phase=[^;]+; exact evidence observed=[^;]+; next gate=[^;]+; blocker/decision needed=[^[:space:]]+' "$label has canonical checkpoint fields"
+  assert_contains "$contract" '^Alternatives:[[:space:]]+[^[:space:]]+.*rejected' "$label records a rejected alternative"
+  assert_contains "$contract" '^No-progress stop:[[:space:]]+[^[:space:]]+' "$label records a no-progress stop"
+  assert_contains "$contract" '^Stop when:[[:space:]]+[^[:space:]]+' "$label records a terminal stop"
+  assert_not_contains "$contract" 'Done when:|Also green:|^Verification:|^Stop:|failure[[:space:]]*=|max_iterations' "$label has no superseded contract labels"
+}
+
 assert_file_contains "$method" 'lightest useful tier|Choose.*tier' 'canonical shared method documents triage'
 assert_file_contains "$method" 'investigat' 'canonical shared method documents investigation'
 assert_file_contains "$method" 'MUST-ASK|DERIVE' 'canonical shared method documents fact classification'
@@ -49,7 +82,12 @@ assert_not_contains "$(cat "$codex")" 'MCP|Hosted tools|write_stdin' 'Codex adap
 assert_file_contains "$claude" 'https://code.claude.com/docs/' 'Claude platform facts cite official documentation'
 assert_file_contains "$codex" 'https://learn.chatgpt.com/docs/hooks' 'Codex platform facts cite official documentation'
 assert_file_contains "$codex" '/goal <objective>' 'Codex adapter documents the conditional native /goal invocation'
-assert_file_contains "$codex" '/goal.*pause.*resume.*clear' 'Codex adapter documents native goal controls'
+assert_file_contains "$codex" '`/goal` to inspect it and the goal progress controls above the composer' 'Codex adapter documents native goal UI controls'
+assert_file_contains "$codex" 'pause or resume the goal' 'Codex adapter documents goal pause/resume UI controls'
+assert_file_contains "$codex" 'edit the goal text, or clear the goal' 'Codex adapter documents goal edit/clear UI controls'
+assert_file_contains "$codex" 'codex exec resume' 'Codex adapter preserves the protected continuation command'
+assert_not_contains "$(cat "$codex")" '/goal[[:space:]]+(pause|resume|clear)([[:space:]]|$)' 'Codex adapter has no unsupported slash lifecycle commands'
+assert_not_contains "$(cat "$codex")" 'documented[[:space:]]+edit[[:space:]]+command' 'Codex adapter has no unsupported edit command wording'
 assert_file_contains "$codex" 'only when.*available|when.*available.*active Codex surface' 'Codex adapter bounds native /goal applicability'
 assert_file_contains "$codex" 'Codex slash commands|reference/slash-commands' 'Codex adapter cites current native goal command documentation'
 assert_not_contains "$(cat "$codex_metadata")" '/goal' 'Codex UI metadata makes no unsupported /goal claim'
@@ -256,16 +294,49 @@ while read -r refresh_selection; do
   fi
 done <<< "$documented_refresh"
 
-docs_example_contract="$(sed -n '30,55p' "$REPO_DIR/docs/examples.md")"
-assert_contains "$docs_example_contract" 'Objective:' 'documentation example includes one agent-facing objective'
-assert_contains "$docs_example_contract" 'Read first:' 'documentation example names read-first sources'
-assert_contains "$docs_example_contract" 'Constraints:' 'documentation example names explicit constraints'
-assert_contains "$docs_example_contract" 'Document:' 'documentation example records documentation impact'
-assert_contains "$docs_example_contract" 'Given:|When:|Then all of the following are true' 'documentation example includes cumulative acceptance'
-assert_contains "$docs_example_contract" 'Validate:.*tests/test_docs.sh' 'documentation example names exact validation'
-assert_contains "$docs_example_contract" 'Checkpoint:' 'documentation example records checkpoint evidence'
-assert_contains "$docs_example_contract" 'Stop when:' 'documentation example records terminal stop'
-assert_not_contains "$docs_example_contract" 'Done when:|Also green:|Verification:' 'documentation example has no superseded contract labels'
+small_vertical_contract=""
+small_vertical_status=0
+small_vertical_contract="$(extract_fenced_block "$REPO_DIR/docs/examples.md" 'Small vertical slice')" || small_vertical_status=$?
+TEST_COUNT=$((TEST_COUNT + 1))
+if [ "$small_vertical_status" -eq 0 ] && [ -n "$small_vertical_contract" ]; then
+  pass 'documentation examples extract the complete Small vertical slice fence'
+else
+  fail 'documentation examples extract the complete Small vertical slice fence'
+fi
+
+docs_example_contract=""
+docs_example_status=0
+docs_example_contract="$(extract_fenced_block "$REPO_DIR/docs/examples.md" 'Documentation change')" || docs_example_status=$?
+TEST_COUNT=$((TEST_COUNT + 1))
+if [ "$docs_example_status" -eq 0 ] && [ -n "$docs_example_contract" ]; then
+  pass 'documentation examples extract the complete Documentation change fence'
+else
+  fail 'documentation examples extract the complete Documentation change fence'
+fi
+
+readme_example_contract=""
+readme_example_status=0
+readme_example_contract="$(extract_fenced_block "$readme" 'Worked example')" || readme_example_status=$?
+TEST_COUNT=$((TEST_COUNT + 1))
+if [ "$readme_example_status" -eq 0 ] && [ -n "$readme_example_contract" ]; then
+  pass 'documentation examples extract the complete README Worked example fence'
+else
+  fail 'documentation examples extract the complete README Worked example fence'
+fi
+
+assert_example_shape "$small_vertical_contract" 'small vertical slice example'
+assert_example_shape "$docs_example_contract" 'documentation change example'
+assert_example_shape "$readme_example_contract" 'README worked example'
+assert_contains "$small_vertical_contract" 'ok: expired session rejected' 'small vertical slice binds the behavioral pass signal'
+assert_contains "$small_vertical_contract" 'PASS: 1 assertion' 'small vertical slice binds the assertion pass signal'
+assert_not_contains "$small_vertical_contract" 'PASS: expired session rejected' 'small vertical slice rejects its superseded pass signal'
+assert_contains "$small_vertical_contract" 'bash tests/run.sh exits 0 with no FAIL lines' 'small vertical slice binds the full-suite failure signal'
+assert_contains "$docs_example_contract" 'bash tests/test_docs.sh exits 0 and reports a line matching "PASS: \[0-9\][+][[:space:]]+assertions"' 'documentation example binds the exact documentation-test pass pattern'
+assert_contains "$docs_example_contract" 'bash tests/run.sh exits 0 with no line matching "\^FAIL:"' 'documentation example binds the full-suite failure pattern'
+assert_not_contains "$docs_example_contract" 'reports "PASS"' 'documentation example rejects generic PASS wording'
+assert_contains "$readme_example_contract" 'PASS: 12 scenarios' 'README worked example preserves its exact pass signal'
+assert_not_contains "$readme_example_contract" '12 passing scenarios' 'README worked example rejects its inexact pass signal'
+assert_contains "$readme_example_contract" 'bash tests/run.sh exits 0 with no FAIL lines' 'README worked example binds the full-suite failure signal'
 assert_file_contains "$method" 'after each bounded slice.*when practical|each bounded slice.*safe validation' 'canonical method qualifies incremental slice validation'
 assert_file_contains "$template" 'Slice validation|slice validation' 'lightweight template records incremental validation or deferral'
 assert_file_contains "$REPO_DIR/shared/author-goal.md" 'fresh-context challenge.*reread|reread.*read-first sources' 'authoring guidance makes challenge procedure executable'
